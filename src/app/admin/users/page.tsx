@@ -480,7 +480,7 @@ const initialUsers = [
 ];
 
 const regionsList = ["Barcha hududlar", "Bosh ofis", "Andijon viloyati", "Buxoro viloyati", "Farg'ona viloyati", "Namangan viloyati", "Toshkent shahar", "Qoraqalpog'iston Resp."];
-const formRegionsList = regionsList.filter(r => r !== "Barcha hududlar"); // Yangi qo'shishda "Barcha hududlar"ni tanlab bo'lmaydi
+const formRegionsList = regionsList.filter(r => r !== "Barcha hududlar");
 
 export default function UsersPage() {
   const [users, setUsers] = useState(initialUsers);
@@ -490,9 +490,8 @@ export default function UsersPage() {
   // Modallar uchun statelar
   const [resetModal, setResetModal] = useState<{isOpen: boolean, user: any, newPass: string | null}>({isOpen: false, user: null, newPass: null});
   const [blockModal, setBlockModal] = useState<{isOpen: boolean, user: any}>({isOpen: false, user: null});
-  
-  // Yangi qo'shish / Tahrirlash Modali uchun state
   const [userModal, setUserModal] = useState<{isOpen: boolean, mode: 'add' | 'edit', user: any}>({isOpen: false, mode: 'add', user: null});
+  
   const [formData, setFormData] = useState({ name: '', email: '', region: '', position: '', role: 'user' });
 
   // Filtrlash logikasi
@@ -504,13 +503,16 @@ export default function UsersPage() {
 
   // --- FUNKSIYALAR ---
 
-  // Parolni tiklash
   const handleResetPassword = () => {
     const generatedPassword = Math.random().toString(36).slice(-8).toUpperCase();
     setResetModal({ ...resetModal, newPass: generatedPassword });
   };
 
-  // Bloklash / Faollashtirish
+  // Shu funksiya yo'qolib qolgan edi
+  const closeResetModal = () => {
+    setResetModal({ isOpen: false, user: null, newPass: null });
+  };
+
   const toggleUserStatus = () => {
     if (blockModal.user) {
       setUsers(users.map(u => 
@@ -520,20 +522,17 @@ export default function UsersPage() {
     }
   };
 
-  // Yangi xodim qo'shish modalini ochish
   const openAddModal = () => {
     setFormData({ name: '', email: '', region: '', position: '', role: 'user' });
     setUserModal({ isOpen: true, mode: 'add', user: null });
   };
 
-  // Tahrirlash modalini ochish
   const openEditModal = (user: any) => {
     setFormData({ name: user.name, email: user.email, region: user.region, position: user.position, role: user.role });
     setUserModal({ isOpen: true, mode: 'edit', user: user });
   };
 
-  // Formani saqlash (Yangi qo'shish yoki Tahrirlash)
-  const handleUserSubmit = (e: React.FormEvent) => {
+  const handleUserSubmit = (e: any) => {
     e.preventDefault();
     if (userModal.mode === 'add') {
       const newUser = {
@@ -541,9 +540,9 @@ export default function UsersPage() {
         ...formData,
         status: 'active'
       };
-      setUsers([newUser, ...users]); // Yangi xodimni ro'yxat boshiga qo'shish
+      setUsers([newUser, ...users]);
     } else {
-      setUsers(users.map(u => u.id === userModal.user.id ? { ...u, ...formData } : u));
+      setUsers(users.map(u => u.id === userModal.user?.id ? { ...u, ...formData } : u));
     }
     setUserModal({ isOpen: false, mode: 'add', user: null });
   };
@@ -573,7 +572,7 @@ export default function UsersPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">F.I.Sh (To'liq ism)</label>
                   <div className="relative">
                     <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="text" required value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600" placeholder="Masalan: Valiyev Alisher" />
+                    <input type="text" required value={formData.name} onChange={(e: any) => setFormData({...formData, name: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600" placeholder="Masalan: Valiyev Alisher" />
                   </div>
                 </div>
 
@@ -581,7 +580,7 @@ export default function UsersPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="email" required value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600" placeholder="name@nbu.uz" />
+                    <input type="email" required value={formData.email} onChange={(e: any) => setFormData({...formData, email: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600" placeholder="name@nbu.uz" />
                   </div>
                 </div>
 
@@ -589,7 +588,7 @@ export default function UsersPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Tizim roli</label>
                   <div className="relative">
                     <Shield className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <select value={formData.role} onChange={e => setFormData({...formData, role: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 bg-white">
+                    <select value={formData.role} onChange={(e: any) => setFormData({...formData, role: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 bg-white">
                       <option value="user">Oddiy xodim</option>
                       <option value="admin">Admin (BKR xodimi)</option>
                     </select>
@@ -600,7 +599,7 @@ export default function UsersPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Hudud / Filial</label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <select required value={formData.region} onChange={e => setFormData({...formData, region: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 bg-white">
+                    <select required value={formData.region} onChange={(e: any) => setFormData({...formData, region: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600 bg-white">
                       <option value="" disabled>Tanlang...</option>
                       {formRegionsList.map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
@@ -611,7 +610,7 @@ export default function UsersPage() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Lavozimi</label>
                   <div className="relative">
                     <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                    <input type="text" required value={formData.position} onChange={e => setFormData({...formData, position: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600" placeholder="Kredit mutaxassisi" />
+                    <input type="text" required value={formData.position} onChange={(e: any) => setFormData({...formData, position: e.target.value})} className="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-lg outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600" placeholder="Kredit mutaxassisi" />
                   </div>
                 </div>
               </div>
@@ -799,7 +798,7 @@ export default function UsersPage() {
                     type="text"
                     placeholder="Ism yoki Email orqali qidirish..."
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e: any) => setSearchQuery(e.target.value)}
                     className="block w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg focus:ring-[#0A2540] focus:border-[#0A2540] text-sm text-slate-900 outline-none"
                   />
                 </div>
@@ -809,7 +808,7 @@ export default function UsersPage() {
                   </div>
                   <select
                     value={selectedRegion}
-                    onChange={(e) => setSelectedRegion(e.target.value)}
+                    onChange={(e: any) => setSelectedRegion(e.target.value)}
                     className="block w-full pl-9 pr-8 py-2.5 border border-slate-300 rounded-lg focus:ring-[#0A2540] focus:border-[#0A2540] text-sm text-slate-900 font-medium outline-none appearance-none bg-white"
                   >
                     {regionsList.map(region => (
