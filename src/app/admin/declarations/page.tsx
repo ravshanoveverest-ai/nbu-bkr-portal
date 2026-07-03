@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   Settings, LogOut, Search, Filter, Download, Eye, AlertTriangle, 
-  CheckCircle, User, FileSpreadsheet, X, Building, ChevronLeft, ChevronRight
+  CheckCircle, User, FileSpreadsheet, X, Building, ChevronLeft, ChevronRight, Activity
 } from 'lucide-react';
-import * as XLSX from 'xlsx'; // EXCEL UCHUN YANGI KUTUBXONA
+import * as XLSX from 'xlsx';
 
-// --- 1. MOCK DATA VA HUDUDLAR RO'YXATI ---
+// --- 1. MOCK DATA VA HUDUDLAR RO'YXATI (6100 / 30 mantiqi) ---
 const regionsList = [
   "Bosh ofis", "Toshkent shahri", "Toshkent viloyati", "Andijon viloyati", 
   "Buxoro viloyati", "Farg'ona viloyati", "Jizzax viloyati", "Xorazm viloyati", 
@@ -17,24 +17,24 @@ const regionsList = [
   "Qoraqalpog'iston Respublikasi", "Samarqand viloyati", "Sirdaryo viloyati", "Surxondaryo viloyati"
 ];
 
-// O'zbekiston bo'yicha progress ma'lumotlari (15 ta hudud)
+// O'zbekiston bo'yicha jami 6100 ta xodim, hozircha jami 30 ta topshirilgan (har biriga 2 tadan)
 const progressData = [
-  { id: 1, name: "Bosh ofis", total: 350, submitted: 340 },
-  { id: 2, name: "Toshkent shahri", total: 280, submitted: 250 },
-  { id: 3, name: "Andijon viloyati", total: 145, submitted: 140 },
-  { id: 4, name: "Samarqand viloyati", total: 160, submitted: 130 },
-  { id: 5, name: "Farg'ona viloyati", total: 135, submitted: 120 },
-  { id: 6, name: "Buxoro viloyati", total: 120, submitted: 85 },
-  { id: 7, name: "Qashqadaryo viloyati", total: 110, submitted: 90 },
-  { id: 8, name: "Namangan viloyati", total: 105, submitted: 100 },
-  { id: 9, name: "Xorazm viloyati", total: 95, submitted: 80 },
-  { id: 10, name: "Navoiy viloyati", total: 85, submitted: 75 },
-  { id: 11, name: "Toshkent viloyati", total: 220, submitted: 190 },
-  { id: 12, name: "Surxondaryo viloyati", total: 115, submitted: 95 },
-  { id: 13, name: "Sirdaryo viloyati", total: 70, submitted: 65 },
-  { id: 14, name: "Jizzax viloyati", total: 80, submitted: 75 },
-  { id: 15, name: "Qoraqalpog'iston Respublikasi", total: 130, submitted: 110 },
-];
+  { id: 1, name: "Bosh ofis", total: 1200, submitted: 2 },
+  { id: 2, name: "Toshkent shahri", total: 900, submitted: 2 },
+  { id: 3, name: "Toshkent viloyati", total: 500, submitted: 2 },
+  { id: 4, name: "Andijon viloyati", total: 350, submitted: 2 },
+  { id: 5, name: "Buxoro viloyati", total: 350, submitted: 2 },
+  { id: 6, name: "Farg'ona viloyati", total: 400, submitted: 2 },
+  { id: 7, name: "Jizzax viloyati", total: 200, submitted: 2 },
+  { id: 8, name: "Xorazm viloyati", total: 300, submitted: 2 },
+  { id: 9, name: "Namangan viloyati", total: 300, submitted: 2 },
+  { id: 10, name: "Navoiy viloyati", total: 100, submitted: 2 },
+  { id: 11, name: "Qashqadaryo viloyati", total: 350, submitted: 2 },
+  { id: 12, name: "Qoraqalpog'iston Respublikasi", total: 300, submitted: 2 },
+  { id: 13, name: "Samarqand viloyati", total: 450, submitted: 2 },
+  { id: 14, name: "Sirdaryo viloyati", total: 100, submitted: 2 },
+  { id: 15, name: "Surxondaryo viloyati", total: 300, submitted: 2 },
+]; // Umumiy Total = 6100 ta
 
 const generateMockData = () => {
   const names = [
@@ -45,7 +45,7 @@ const generateMockData = () => {
   return Array.from({ length: 30 }, (_, i) => ({
     id: i + 1,
     name: names[i % 10] + (i >= 10 ? ` ${i+1}` : ''),
-    region: regionsList[i % regionsList.length],
+    region: regionsList[i % 15], 
     date: `2024-02-${String((i % 28) + 1).padStart(2, '0')}`,
     risk: i % 3 === 0 ? 'high' : i % 2 === 0 ? 'medium' : 'low',
     reason: i % 3 === 0 ? "Qarindoshi rahbarlik lavozimida" : i % 2 === 0 ? "O'zining nomida MCHJ mavjud" : "Xavf aniqlanmadi",
@@ -54,7 +54,13 @@ const generateMockData = () => {
       relatives: [
         { name: "Eshmatov Toshmat", relation: "Otasi", worksAtNbu: i % 4 === 0, nbuBranch: i % 4 === 0 ? "Bosh ofis" : "" }
       ],
-      companies: i % 2 === 0 ? [ { name: `Biznes Plus MCHJ ${i}`, stir: `30${String(i).padStart(7, '1')}`, percent: (i+1)*5 } ] : []
+      // YANGI QO'SHILDI: Yuridik shaxslardagi ulushlar va lavozimlar (Excel tortib olishi uchun)
+      companies: (() => {
+        let comps = [];
+        if (i % 2 === 0) comps.push({ name: `Biznes Plus MCHJ`, stir: `30${String(i).padStart(7, '1')}`, percent: Math.min((i+1)*5, 100), role: "Ta'sischi", owner: "O'ziga" });
+        if (i % 3 === 0) comps.push({ name: `Qurilish MCHJ`, stir: `20${String(i).padStart(7, '2')}`, percent: 50, role: "Rahbar", owner: "Qarindoshiga" });
+        return comps;
+      })()
     }
   }));
 };
@@ -83,35 +89,38 @@ const normalizeText = (text: string) => {
 
 // --- 3. HAQIQIY EXCEL (.XLSX) YUKLASH FUNKSIYASI ---
 const downloadExcel = (data: any[][], filename: string, colWidths: number[]) => {
-  const worksheet = XLSX.utils.aoa_to_sheet(data); // Array of arrays to sheet
-  
-  // Ustunlarning kengligini (chiroyli qilib) sozlash
+  const worksheet = XLSX.utils.aoa_to_sheet(data);
   worksheet['!cols'] = colWidths.map(w => ({ wch: w }));
-
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Ma'lumotlar");
-  
-  // Excel faylni to'g'ridan-to'g'ri .xlsx formatida yuklash
   XLSX.writeFile(workbook, filename);
 };
 
 export default function DeclarationsPage() {
   const [search, setSearch] = useState('');
   const [regionFilter, setRegionFilter] = useState('Barcha hududlar');
+  const [riskFilter, setRiskFilter] = useState('Barcha holatlar'); 
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedDecl, setSelectedDecl] = useState<any>(null);
 
   const itemsPerPage = 20;
 
-  // Filtrlash va qidirish
+  // Filtrlash va qidirish (Risk Filtri bilan)
   const filteredData = useMemo(() => {
     const normalizedSearch = normalizeText(search);
     return mockDeclarations.filter(item => {
       const matchRegion = regionFilter === 'Barcha hududlar' || item.region === regionFilter;
       const matchSearch = normalizeText(item.name).includes(normalizedSearch);
-      return matchRegion && matchSearch;
+      
+      let matchRisk = true;
+      if (riskFilter === 'Yashil hudud') matchRisk = item.risk === 'low';
+      else if (riskFilter === 'Sariq hudud') matchRisk = item.risk === 'medium';
+      else if (riskFilter === 'Qizil hudud') matchRisk = item.risk === 'high';
+      else if (riskFilter === 'Sariq va qizil hududlar') matchRisk = item.risk === 'medium' || item.risk === 'high';
+
+      return matchRegion && matchSearch && matchRisk;
     });
-  }, [search, regionFilter]);
+  }, [search, regionFilter, riskFilter]);
 
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const currentData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
@@ -125,46 +134,45 @@ export default function DeclarationsPage() {
       ["3", "Rahmonov Botir", regionName === "Barcha hududlar" ? "Buxoro viloyati" : regionName, "Buxgalter", "Topshirmagan"]
     ];
     
-    // Ustun kengliklari (ID, Ism, Hudud, Lavozim, Holati)
     const colWidths = [5, 35, 25, 25, 20];
     downloadExcel(excelData, `Qarzdorlar_${regionName.replace(/\s+/g, '_')}.xlsx`, colWidths);
   };
 
-  // Asosiy Jadvalni Excel yuklash (Filtrlangan ma'lumotlarni TO'LIQ ustunlar bilan)
+  // Asosiy Jadvalni Excel yuklash (H USTUNIGA MA'LUMOT QO'SHISH)
   const handleDownloadFilteredData = () => {
     const excelData = [
       ["ID", "Xodim F.I.Sh", "Pasport", "JSHSHIR", "Hudud / Filial", "Sana", "Xavf darajasi", "Tizim Xulosasi (Risk)", "Qarindoshlar ma'lumoti"],
       ...filteredData.map(item => {
-        // Xavf darajasini rasmga moslab o'zgartiramiz
         const riskLevel = item.risk === 'high' ? 'Qizil (Xavfli)' : item.risk === 'medium' ? 'Sariq (Diqqat)' : 'Yashil (Toza)';
         
-        // Qarindoshlar ma'lumotini shakllantiramiz
         let relativesInfo = "Yo'q";
         if (item.details.relatives && item.details.relatives.length > 0) {
           relativesInfo = item.details.relatives.map((rel: any) => {
-            if (rel.worksAtNbu) {
-              return `${rel.name} (${rel.relation}) - NBUda ishlaydi: HA (${rel.nbuBranch})`;
-            }
+            if (rel.worksAtNbu) return `${rel.name} (${rel.relation}) - NBUda ishlaydi: HA (${rel.nbuBranch})`;
             return `${rel.name} (${rel.relation}) - NBUda ishlaydi: YO'Q`;
           }).join(" | ");
         }
 
+        // H USTUNI (Tizim Xulosasi) uchun qo'shimcha ma'lumotlarni yig'amiz
+        let companyDetailsStr = "";
+        if (item.details.companies && item.details.companies.length > 0) {
+          companyDetailsStr = item.details.companies.map((comp: any) => {
+            return `[${comp.owner} tegishli: "${comp.name}" korxonasida ${comp.role} (${comp.percent}% ulush)]`;
+          }).join(" ");
+        }
+
+        // Sababni va kompaniya detallarini qo'shamiz
+        const fullReasonText = companyDetailsStr ? `${item.reason}. ${companyDetailsStr}` : item.reason;
+
         return [
-          item.id,
-          item.name,
-          item.details.personal.passport,
-          item.details.personal.pinfl,
-          item.region,
-          item.date,
-          riskLevel,
-          item.reason,
-          relativesInfo
+          item.id, item.name, item.details.personal.passport, item.details.personal.pinfl,
+          item.region, item.date, riskLevel, fullReasonText, relativesInfo
         ];
       })
     ];
 
-    // Har bir ustun uchun taxminiy kenglik (Excelda yopishib qolmasligi uchun)
-    const colWidths = [5, 35, 12, 16, 25, 12, 15, 35, 60];
+    // H ustuni uchun kenglikni kattalashtiramiz (50)
+    const colWidths = [5, 35, 12, 16, 25, 12, 15, 60, 60];
     downloadExcel(excelData, `NBU_Deklaratsiyalar_${regionFilter.replace(/\s+/g, '_')}.xlsx`, colWidths);
   };
 
@@ -217,10 +225,19 @@ export default function DeclarationsPage() {
                 {selectedDecl.details.companies.length > 0 ? (
                   <div className="space-y-3">
                     {selectedDecl.details.companies.map((comp: any, i: number) => (
-                      <div key={i} className="p-3 bg-slate-50 rounded-lg border border-slate-100 grid grid-cols-3 gap-4 items-center">
-                        <div className="col-span-1"><p className="text-xs text-slate-500 mb-1">Kompaniya nomi</p><p className="font-bold text-slate-800 text-sm">{comp.name}</p></div>
-                        <div className="col-span-1"><p className="text-xs text-slate-500 mb-1">STIR</p><p className="font-semibold text-slate-800 text-sm">{comp.stir}</p></div>
-                        <div className="col-span-1 text-right"><p className="text-xs text-slate-500 mb-1">Ulushi</p><span className="bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded">{comp.percent}%</span></div>
+                      <div key={i} className="p-4 bg-slate-50 rounded-lg border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                        <div>
+                          <p className="text-xs text-slate-500 mb-0.5">Kompaniya nomi / STIR</p>
+                          <p className="font-bold text-slate-800 text-sm">{comp.name}</p>
+                          <p className="font-mono text-xs text-slate-500">{comp.stir}</p>
+                        </div>
+                        <div className="md:text-right">
+                          <p className="text-xs text-slate-500 mb-0.5">Holati</p>
+                          <span className="inline-block bg-blue-100 text-blue-700 text-[11px] font-bold px-2.5 py-1 rounded">
+                            {comp.role} ({comp.percent}% ulush)
+                          </span>
+                          <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">{comp.owner} tegishli</p>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -288,29 +305,32 @@ export default function DeclarationsPage() {
           {/* STATS & PROGRESS SECTION */}
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
             
-            {/* Jami Topshirilgan Blok */}
+            {/* Jami Topshirilgan Blok (30 / 6100) */}
             <div className="bg-white rounded-2xl p-8 border border-blue-100 shadow-sm flex flex-col justify-center relative overflow-hidden xl:col-span-1">
               <div className="absolute right-0 top-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-10 -mt-10"></div>
               <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">Jami topshirilgan</p>
-              <h3 className="text-4xl font-black text-[#0A2540] relative z-10">4,032 <span className="text-xl font-semibold text-slate-400">/ 6,100</span></h3>
+              <h3 className="text-4xl font-black text-[#0A2540] relative z-10">30 <span className="text-xl font-semibold text-slate-400">/ 6,100</span></h3>
               <p className="text-sm text-blue-600 font-medium mt-4 relative z-10 flex items-center gap-2">
-                <FileText className="w-4 h-4"/> Umumiy jarayon: 66%
+                <FileText className="w-4 h-4"/> Umumiy jarayon: {((30/6100) * 100).toFixed(1)}%
               </p>
             </div>
 
             {/* Hududlar bo'yicha progress va Excel download */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 xl:col-span-2">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 xl:col-span-2 flex flex-col h-[180px]">
               <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center justify-between">
-                Hududlar kesimida
+                Hududlar kesimida (6100 ta xodim)
                 <button onClick={() => handleDownloadDebtors("Barcha hududlar")} className="text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors">
                   <Download className="w-3.5 h-3.5"/> Barcha qarzdorlarni yuklash
                 </button>
               </h2>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4 max-h-[160px] overflow-y-auto pr-2 custom-scrollbar">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                 {progressData.map((item) => {
-                  const percent = Math.round((item.submitted / item.total) * 100);
-                  const barColor = percent >= 90 ? 'bg-emerald-500' : percent >= 70 ? 'bg-blue-500' : 'bg-red-500';
+                  const percent = (item.submitted / item.total) * 100;
+                  const displayPercent = percent < 1 ? percent.toFixed(1) : Math.round(percent);
+                  // Ko'zga ko'rinishi uchun progressni minimum 1.5% qilib ko'rsatamiz
+                  const barWidth = Math.max(1.5, percent);
+                  const barColor = item.submitted >= item.total * 0.9 ? 'bg-emerald-500' : item.submitted >= item.total * 0.7 ? 'bg-blue-500' : 'bg-red-500';
                   
                   return (
                     <div key={item.id} className="relative group">
@@ -323,8 +343,9 @@ export default function DeclarationsPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden relative">
-                          <div className={`h-full rounded-full transition-all duration-1000 ${barColor}`} style={{ width: `${percent}%` }}></div>
+                          <div className={`h-full rounded-full transition-all duration-1000 ${barColor}`} style={{ width: `${barWidth}%` }}></div>
                         </div>
+                        <span className="text-[10px] font-bold text-slate-400 min-w-[30px]">{displayPercent}%</span>
                         <button 
                           onClick={() => handleDownloadDebtors(item.name)}
                           title={`${item.name} qarzdorlarini yuklash`}
@@ -342,20 +363,26 @@ export default function DeclarationsPage() {
 
           {/* TABLE SECTION */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            {/* Toolbar (Qidiruv + Excel yuklash asosiysi) */}
-            <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
-              <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full">
-                <div className="relative sm:w-80">
+            
+            {/* Toolbar (Qidiruv + Hudud + Risk Filtri + Excel yuklash asosiysi) */}
+            <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+              
+              <div className="flex flex-col md:flex-row gap-4 flex-1 w-full">
+                
+                {/* Qidiruv */}
+                <div className="relative md:flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <input 
                     type="text" 
                     value={search}
                     onChange={(e) => {setSearch(e.target.value); setCurrentPage(1);}}
-                    placeholder="F.I.Sh orqali aqlli qidiruv..." 
+                    placeholder="F.I.Sh orqali aqlli qidiruv (Krill/Lotin)..." 
                     className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-blue-600 bg-white transition-colors" 
                   />
                 </div>
-                <div className="relative sm:w-56">
+                
+                {/* Hudud Filtr */}
+                <div className="relative sm:w-48 md:w-56">
                   <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <select 
                     value={regionFilter}
@@ -366,12 +393,29 @@ export default function DeclarationsPage() {
                     {regionsList.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
+
+                {/* XAVF DARAJASI BO'YICHA FILTR */}
+                <div className="relative sm:w-48 md:w-56">
+                  <Activity className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <select 
+                    value={riskFilter}
+                    onChange={(e) => {setRiskFilter(e.target.value); setCurrentPage(1);}}
+                    className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 outline-none focus:border-blue-600 appearance-none bg-white font-medium cursor-pointer"
+                  >
+                    <option value="Barcha holatlar">Barcha holatlar</option>
+                    <option value="Yashil hudud">Yashil hudud (Toza)</option>
+                    <option value="Sariq hudud">Sariq hudud (Diqqat)</option>
+                    <option value="Qizil hudud">Qizil hudud (Xavfli)</option>
+                    <option value="Sariq va qizil hududlar">Sariq va qizil hududlar</option>
+                  </select>
+                </div>
+
               </div>
               
               {/* ASOSIY JADVALNI YUKLASH (EXCEL) TUGMASI */}
               <button 
                 onClick={handleDownloadFilteredData}
-                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap w-full sm:w-auto shadow-sm"
+                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap w-full md:w-auto shadow-sm"
               >
                 <Download className="w-4 h-4" /> Excel yuklab olish
               </button>
