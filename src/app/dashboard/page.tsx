@@ -143,27 +143,13 @@ export default function DashboardPage() {
       {showTypeModal && (
         <div className="fixed inset-0 z-50 flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full p-6 animate-in zoom-in-95">
-            <div className="flex justify-between items-start mb-4">
+            <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-xl font-bold text-[#0A2540]">Deklaratsiya turini tanlang</h2>
-                <p className="text-sm text-slate-500 mt-1">Hozirgi holatingizga mos keladigan deklaratsiyani tanlang yoki avvalgisini yuklang.</p>
+                <p className="text-sm text-slate-500 mt-1">Hozirgi holatingizga mos keladigan deklaratsiyani tanlang.</p>
               </div>
               <button onClick={() => setShowTypeModal(false)} className="text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors">
                 <X className="w-6 h-6" />
-              </button>
-            </div>
-
-            {/* AVTO-TO'LDIRISH TUGMASI (YANGI) */}
-            <div className="mb-6 mt-2 bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div>
-                <h4 className="text-sm font-bold text-blue-900 flex items-center gap-1.5"><Save className="w-4 h-4"/> Saqlangan ma'lumotlar</h4>
-                <p className="text-xs text-blue-700 mt-1">Oldingi yilgi yoki avvalgi to'ldirgan ma'lumotlaringiz asosida avtomatik to'ldirish.</p>
-              </div>
-              <button 
-                onClick={handleAutofill}
-                className="whitespace-nowrap px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm"
-              >
-                Ma'lumotlarni yuklash
               </button>
             </div>
 
@@ -262,7 +248,6 @@ export default function DashboardPage() {
                 <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
                   <FileText className="w-7 h-7" />
                 </div>
-                {/* Status qismi olib tashlandi, chunki ichida 3 xil status bor */}
               </div>
               <h3 className="text-2xl font-bold text-slate-800 mb-3">Manfaatlar To'qnashuvi Deklaratsiyasi</h3>
               <p className="text-slate-500 text-sm leading-relaxed mb-8">
