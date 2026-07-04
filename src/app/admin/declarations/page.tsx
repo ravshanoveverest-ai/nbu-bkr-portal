@@ -7,7 +7,7 @@ import {
   Settings, LogOut, Search, Filter, Download, Eye, AlertTriangle, 
   CheckCircle, User, FileSpreadsheet, X, Building, ChevronLeft, ChevronRight, Activity
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import * as XLSX from 'xlsx-js-style'; // Agar ranglar ishlashini xohlasangiz buni 'xlsx-js-style' ga o'zgartiring
 
 // --- 1. MOCK DATA VA HUDUDLAR RO'YXATI (6100 / 30 mantiqi) ---
 const regionsList = [
@@ -52,9 +52,8 @@ const generateMockData = () => {
     details: {
       personal: { pinfl: `3${String(i+1).padStart(13, '0')}`, passport: `AA${String(i+1).padStart(7, '0')}` },
       relatives: [
-        { name: "Eshmatov Toshmat", relation: "Otasi", worksAtNbu: i % 4 === 0, nbuBranch: i % 4 === 0 ? "Bosh ofis" : "" }
+        { name: "Eshmatov Toshmat", relation: "Otasi", worksAtNbu: i % 4 === 0, nbuBranch: i % 4 === 0 ? "Bosh ofis (Kredit mutaxassisi)" : "" }
       ],
-      // YANGI QO'SHILDI: Yuridik shaxslardagi ulushlar va lavozimlar (Excel tortib olishi uchun)
       companies: (() => {
         let comps = [];
         if (i % 2 === 0) comps.push({ name: `Biznes Plus MCHJ`, stir: `30${String(i).padStart(7, '1')}`, percent: Math.min((i+1)*5, 100), role: "Ta'sischi", owner: "O'ziga" });
@@ -91,8 +90,32 @@ const normalizeText = (text: string) => {
 const downloadExcel = (data: any[][], filename: string, colWidths: number[]) => {
   const worksheet = XLSX.utils.aoa_to_sheet(data);
   worksheet['!cols'] = colWidths.map(w => ({ wch: w }));
+
+  // Dizayn va ranglarni berish (xlsx-js-style orqali to'liq ishlaydi)
+  const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
+  for (let R = range.s.r; R <= range.e.r; ++R) {
+    for (let C = range.s.c; C <= range.e.c; ++C) {
+      const address = XLSX.utils.encode_cell({ c: C, r: R });
+      if (!worksheet[address]) continue;
+      
+      if (R === 0) {
+        // Sarlavha (Header) stili (To'q ko'k fon, oq qalin yozuv)
+        worksheet[address].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          fill: { fgColor: { rgb: "0A2540" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true }
+        };
+      } else {
+        // Ichki ma'lumotlar stili (Yozuvlar tepaga tekislanadi va pastga qator tashlaydi)
+        worksheet[address].s = {
+          alignment: { vertical: "top", wrapText: true }
+        };
+      }
+    }
+  }
+
   const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Ma'lumotlar");
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Deklaratsiyalar");
   XLSX.writeFile(workbook, filename);
 };
 
@@ -125,7 +148,7 @@ export default function DeclarationsPage() {
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
   const currentData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Qarzdorlarni Excel yuklash (Topshirmaganlar ro'yxati)
+  // Qarzdorlarni Excel yuklash
   const handleDownloadDebtors = (regionName: string) => {
     const excelData = [
       ["ID", "Xodim F.I.Sh", "Hudud / Filial", "Lavozimi", "Holati"],
@@ -138,42 +161,66 @@ export default function DeclarationsPage() {
     downloadExcel(excelData, `Qarzdorlar_${regionName.replace(/\s+/g, '_')}.xlsx`, colWidths);
   };
 
-  // Asosiy Jadvalni Excel yuklash (H USTUNIGA MA'LUMOT QO'SHISH)
+  // Asosiy Jadvalni Excel yuklash (BARCHA MA'LUMOTLAR BILAN)
   const handleDownloadFilteredData = () => {
+    const header = [
+      "ID", 
+      "XODIM F.I.SH", 
+      "SHAXSIY MA'LUMOTLAR (Pasport va JSHSHIR)", 
+      "HUDUD / FILIAL", 
+      "TOPSHIRILGAN SANA", 
+      "XAVF DARAJASI", 
+      "TIZIM XULOSASI (Sabab)", 
+      "YAQIN QARINDOSHLAR HAQIDA MA'LUMOT", 
+      "YURIDIK SHAXSLARGA ALOQADORLIK (Kompaniyalar)"
+    ];
+
     const excelData = [
-      ["ID", "Xodim F.I.Sh", "Pasport", "JSHSHIR", "Hudud / Filial", "Sana", "Xavf darajasi", "Tizim Xulosasi (Risk)", "Qarindoshlar ma'lumoti"],
+      header,
       ...filteredData.map(item => {
-        const riskLevel = item.risk === 'high' ? 'Qizil (Xavfli)' : item.risk === 'medium' ? 'Sariq (Diqqat)' : 'Yashil (Toza)';
+        // Xavf darajasi
+        const riskLevel = item.risk === 'high' ? '🔴 Qizil (Xavfli)' : item.risk === 'medium' ? '🟡 Sariq (Diqqat)' : '🟢 Yashil (Toza)';
         
-        let relativesInfo = "Yo'q";
+        // Shaxsiy pasport va JSHSHIR
+        const personalData = `Pasport: ${item.details.personal.passport}\nJSHSHIR: ${item.details.personal.pinfl}`;
+
+        // Qarindoshlar ro'yxatini matnga aylantirish (Enter bilan)
+        let relativesInfo = "Ma'lumot mavjud emas";
         if (item.details.relatives && item.details.relatives.length > 0) {
-          relativesInfo = item.details.relatives.map((rel: any) => {
-            if (rel.worksAtNbu) return `${rel.name} (${rel.relation}) - NBUda ishlaydi: HA (${rel.nbuBranch})`;
-            return `${rel.name} (${rel.relation}) - NBUda ishlaydi: YO'Q`;
-          }).join(" | ");
+          relativesInfo = item.details.relatives.map((rel: any, i: number) => {
+            const nbuText = rel.worksAtNbu ? `✅ NBU da ishlaydi (${rel.nbuBranch})` : "❌ NBU da ishlamaydi";
+            return `${i + 1}. ${rel.name} (${rel.relation})\n   ${nbuText}`;
+          }).join("\n\n");
         }
 
-        // H USTUNI (Tizim Xulosasi) uchun qo'shimcha ma'lumotlarni yig'amiz
-        let companyDetailsStr = "";
+        // Kompaniyalar ro'yxatini matnga aylantirish
+        let companyDetailsStr = "Yuridik shaxslar aniqlanmadi";
         if (item.details.companies && item.details.companies.length > 0) {
-          companyDetailsStr = item.details.companies.map((comp: any) => {
-            return `[${comp.owner} tegishli: "${comp.name}" korxonasida ${comp.role} (${comp.percent}% ulush)]`;
-          }).join(" ");
+          companyDetailsStr = item.details.companies.map((comp: any, i: number) => {
+            return `${i + 1}. Nomi: "${comp.name}"\n   STIR: ${comp.stir}\n   Holati: ${comp.role} (${comp.percent}% ulush)\n   Tegishli: ${comp.owner}`;
+          }).join("\n\n");
         }
 
-        // Sababni va kompaniya detallarini qo'shamiz
-        const fullReasonText = companyDetailsStr ? `${item.reason}. ${companyDetailsStr}` : item.reason;
+        // Tizim xulosasi (Agar firma bo'lsa qisqacha qo'shib qo'yamiz)
+        const summary = item.reason;
 
         return [
-          item.id, item.name, item.details.personal.passport, item.details.personal.pinfl,
-          item.region, item.date, riskLevel, fullReasonText, relativesInfo
+          item.id, 
+          item.name, 
+          personalData, 
+          item.region, 
+          item.date, 
+          riskLevel, 
+          summary, 
+          relativesInfo, 
+          companyDetailsStr
         ];
       })
     ];
 
-    // H ustuni uchun kenglikni kattalashtiramiz (50)
-    const colWidths = [5, 35, 12, 16, 25, 12, 15, 60, 60];
-    downloadExcel(excelData, `NBU_Deklaratsiyalar_${regionFilter.replace(/\s+/g, '_')}.xlsx`, colWidths);
+    // Ustunlarning aniq kengliklari (Ko'p ma'lumot sig'ishi uchun kattalashtirildi)
+    const colWidths = [5, 30, 25, 25, 18, 18, 30, 45, 50];
+    downloadExcel(excelData, `Deklaratsiyalar_Baza_${regionFilter.replace(/\s+/g, '_')}.xlsx`, colWidths);
   };
 
   return (

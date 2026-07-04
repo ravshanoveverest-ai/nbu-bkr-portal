@@ -2,23 +2,27 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   ArrowLeft, ArrowRight, User, Users, Building, AlertTriangle, 
-  CheckCircle, Plus, Trash2, ShieldCheck, ChevronLeft
+  CheckCircle, Plus, Trash2, ShieldCheck, ChevronLeft, Save
 } from 'lucide-react';
 
 export default function DeclarationPage() {
+  const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [isAutofilled, setIsAutofilled] = useState(false);
 
   // Deklaratsiya Form State
   const [formData, setFormData] = useState({
-    personal: { fullName: '', passport: '', pinfl: '' },
+    personal: { fullName: '', branch: '', position: '', passport: '', passportDate: '', pinfl: '' },
     relatives: [{ 
       relationship: '', 
       fullName: '', 
       passport: '', 
+      passportDate: '',
       pinfl: '', 
       noInfo: false,
       worksAtNBU: false,
@@ -38,37 +42,26 @@ export default function DeclarationPage() {
     { id: 4, name: 'Tasdiqlash', icon: AlertTriangle },
   ];
 
-  // Qarindoshlik darajalari ro'yxati
+  // Qarindoshlik darajalari
   const relationshipOptions = [
     "Otasi", "Onasi", "Turmush o'rtog'i", "Akasi", "Ukasi", 
     "Opasi", "Singlisi", "O'g'li", "Qizi", "Bobosi", "Buvisi"
   ];
 
-  // NBU filiallari (MVP uchun namunaviy)
-  const nbuBranches = [
-    "Bosh ofis", "Andijon viloyati bosh amaliyot filiali", "Buxoro viloyati filiali",
-    "Farg'ona viloyati filiali", "Namangan viloyati filiali", "Toshkent shahar Bosh filiali"
-  ];
-
-  // NBU lavozimlari (MVP uchun namunaviy)
-  const nbuPositions = [
-    "Boshqaruvchi", "O'rinbosar", "Bo'lim boshlig'i", "Bosh mutaxassis",
-    "Yetakchi mutaxassis", "Kredit mutaxassisi", "Kassir", "Buxgalter"
-  ];
-
-  // Regex naqshlari
   const passportRegex = /^[a-zA-Z]{2}\d{7}$/;
   const pinflRegex = /^\d{14}$/;
   const stirRegex = /^\d{9}$/;
 
-  // Validatsiya funksiyasi
   const validateStep = () => {
     const newErrors: string[] = [];
     
     if (currentStep === 1) {
       if (formData.personal.fullName.trim().length < 5) newErrors.push("F.I.Sh ni to'liq kiriting");
+      if (formData.personal.branch.trim().length < 3) newErrors.push("Filial/BXM nomini kiriting");
+      if (formData.personal.position.trim().length < 3) newErrors.push("Lavozimingizni kiriting");
       if (!passportRegex.test(formData.personal.passport)) newErrors.push("Pasport formati noto'g'ri (Masalan: AA1234567)");
-      if (!pinflRegex.test(formData.personal.pinfl)) newErrors.push("JSHSHIR 14 ta raqamdan iborat bo'lishi shart");
+      if (!formData.personal.passportDate) newErrors.push("Pasport berilgan sanasini tanlang");
+      if (formData.personal.pinfl && !pinflRegex.test(formData.personal.pinfl)) newErrors.push("JSHSHIR 14 ta raqamdan iborat bo'lishi shart");
     } 
     else if (currentStep === 2) {
       formData.relatives.forEach((rel, index) => {
@@ -77,12 +70,13 @@ export default function DeclarationPage() {
         if (!rel.noInfo) {
           if (rel.fullName.trim().length < 5) newErrors.push(`${index + 1}-qarindoshning F.I.Sh chala kiritilgan`);
           if (rel.passport && !passportRegex.test(rel.passport)) newErrors.push(`${index + 1}-qarindoshning pasporti xato`);
+          if (rel.passport && !rel.passportDate) newErrors.push(`${index + 1}-qarindoshning pasport sanasi tanlanmagan`);
           if (rel.pinfl && !pinflRegex.test(rel.pinfl)) newErrors.push(`${index + 1}-qarindoshning JSHSHIR xato`);
         }
 
         if (rel.worksAtNBU) {
-          if (!rel.nbuBranch) newErrors.push(`${index + 1}-qarindosh uchun NBU filiali tanlanmagan`);
-          if (!rel.nbuPosition) newErrors.push(`${index + 1}-qarindosh uchun NBU lavozimi tanlanmagan`);
+          if (rel.nbuBranch.trim().length < 3) newErrors.push(`${index + 1}-qarindosh uchun NBU filiali/BXM kiritilmagan`);
+          if (rel.nbuPosition.trim().length < 3) newErrors.push(`${index + 1}-qarindosh uchun NBU lavozimi kiritilmagan`);
         }
       });
     }
@@ -115,10 +109,9 @@ export default function DeclarationPage() {
     }
   };
 
-  // Dinamik yordamchi funksiyalar
   const addRelative = () => setFormData({ 
     ...formData, 
-    relatives: [...formData.relatives, { relationship: '', fullName: '', passport: '', pinfl: '', noInfo: false, worksAtNBU: false, nbuBranch: '', nbuPosition: '' }] 
+    relatives: [...formData.relatives, { relationship: '', fullName: '', passport: '', passportDate: '', pinfl: '', noInfo: false, worksAtNBU: false, nbuBranch: '', nbuPosition: '' }] 
   });
   
   const removeRelative = (index: number) => setFormData({ 
@@ -138,8 +131,39 @@ export default function DeclarationPage() {
     setFormData({ ...formData, [type]: formData[type].filter((_, i) => i !== index) });
   };
 
+  // AVTO-TO'LDIRISH (MOCK DATA)
+  const handleAutofill = () => {
+    const savedData = {
+      personal: { fullName: "Valiyev Alisher Baxodirovich", branch: "Bosh ofis", position: "Boshqaruvchi", passport: "AA1234567", passportDate: "2018-05-12", pinfl: "31205931234567" },
+      relatives: [
+        { relationship: "Otasi", fullName: "Valiyev Baxodir", passport: "AB7654321", passportDate: "2015-11-20", pinfl: "31205601234567", noInfo: false, worksAtNBU: true, nbuBranch: "Toshkent shahar Bosh filiali", nbuPosition: "Kredit mutaxassisi" },
+        { relationship: "Turmush o'rtog'i", fullName: "Valiyeva Nargiza", passport: "AC9876543", passportDate: "2020-01-15", pinfl: "41205981234567", noInfo: false, worksAtNBU: false, nbuBranch: "", nbuPosition: "" }
+      ],
+      myCompanies: [
+        { companyName: "Alisher IT Solutions MCHJ", stir: "305123456", isLeader: "Ha", roleInCompany: "Ta'sischi", sharePercent: "100", noDetails: false }
+      ],
+      relativeCompanies: [
+        { relativeName: "Valiyev Baxodir", companyName: "Baxodir Qurilish", stir: "205987654", isLeader: "Ha", roleInCompany: "Rahbar", sharePercent: "50", noDetails: false }
+      ],
+      conflictInfo: '',
+      additionalInfo: ''
+    };
+
+    setFormData(savedData);
+    setIsAutofilled(true);
+  };
+
+  // FOOTNOTE
+  const renderFootnote = () => (
+    <div className="mt-8 pt-4 border-t border-slate-200">
+      <p className="text-[11px] text-slate-500 text-justify leading-relaxed">
+        *Xodim unga aloqador shaxslarning (xodimning yaqin qarindoshlari yoki xodimning yaqin qarindoshlari ustav fondi (ustav kapitali) aksiyalariga yoki ulushlariga egalik qiladigan yoxud boshqaruv organi rahbari yoki a'zosi bo'lgan yuridik shaxs) identifikatsiya ID-kartasi (biometrik pasporti), JSHSHIR, STIR bo'yicha ma'lumotlarni olish imkoniyatiga ega bo'lmasa, u tomonidan tegishli pozitsiyalarda "ma'lumotga ega emasman" deb izoh ko'rsatilishi mumkin.
+      </p>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-12 relative">
+    <div className="min-h-screen bg-[#F8FAFC] pb-12 relative font-sans">
       
       {/* SUCCESS MODAL */}
       {showSuccessModal && (
@@ -215,38 +239,98 @@ export default function DeclarationPage() {
           {/* 1-QADAM: Shaxsiy ma'lumotlar */}
           {currentStep === 1 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h2 className="text-xl font-bold text-slate-800 mb-6 border-b pb-4">1. Ходимга оид маълумотлар</h2>
+              
+              {/* AVTO-TO'LDIRISH BLOKI */}
+              <div className="mb-10 bg-[#F0F5FF] border border-[#D6E4FF] p-5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex gap-3">
+                  <div className="mt-0.5">
+                     <Save className="w-5 h-5 text-blue-700" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-[#1E3A8A] mb-1">Saqlangan ma'lumotlar</h4>
+                    <p className="text-xs text-blue-600">Oldingi yilgi yoki avvalgi to'ldirgan ma'lumotlaringiz asosida avtomatik to'ldirish imkoniyati.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAutofill}
+                  disabled={isAutofilled}
+                  className="whitespace-nowrap px-5 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:bg-slate-300 disabled:text-slate-500 disabled:cursor-not-allowed"
+                >
+                  {isAutofilled ? "Ma'lumotlar yuklandi" : "Ma'lumotlarni yuklash"}
+                </button>
+              </div>
+
+              <div className="text-center mb-8">
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-800 uppercase tracking-wide">
+                  Ehtimoliy manfaatlar to'qnashuvi to'g'risidagi<br/> DEKLARATSIYA
+                </h2>
+              </div>
+
+              {/* Hujjat uslubidagi interaktiv matn */}
+              <div className="bg-slate-50 p-6 md:p-8 rounded-xl border border-slate-200 mb-8 text-slate-800 leading-loose text-lg md:text-xl font-medium shadow-inner">
+                Men, 
+                <input 
+                  type="text" 
+                  placeholder="Familiya, ismi, otasining ismi" 
+                  value={formData.personal.fullName}
+                  onChange={(e) => setFormData({...formData, personal: {...formData.personal, fullName: e.target.value}})}
+                  className="mx-3 inline-block w-64 md:w-80 border-b-2 border-slate-400 bg-transparent px-2 py-1 text-center font-bold text-blue-800 outline-none focus:border-blue-600 placeholder-slate-300 transition-colors"
+                /> 
+                ( 
+                <input 
+                  type="text" 
+                  placeholder="Qaysi filial / BXM" 
+                  value={formData.personal.branch}
+                  onChange={(e) => setFormData({...formData, personal: {...formData.personal, branch: e.target.value}})}
+                  className="mx-2 inline-block w-48 md:w-60 border-b-2 border-slate-400 bg-transparent px-2 py-1 text-center font-bold text-blue-800 outline-none focus:border-blue-600 placeholder-slate-300 transition-colors"
+                /> 
+                ,
+                <input 
+                  type="text" 
+                  placeholder="Lavozimi" 
+                  value={formData.personal.position}
+                  onChange={(e) => setFormData({...formData, personal: {...formData.personal, position: e.target.value}})}
+                  className="mx-2 inline-block w-48 md:w-60 border-b-2 border-slate-400 bg-transparent px-2 py-1 text-center font-bold text-blue-800 outline-none focus:border-blue-600 placeholder-slate-300 transition-colors"
+                /> 
+                ) ushbu to'ldirayotgan deklaratsiyada o'zim va menga aloqador shaxslarning ehtimoliy manfaatlar to'qnashuviga oid quyidagi ma'lumotlarni oshkor qilaman:
+              </div>
+
+              <h3 className="text-xl font-bold text-slate-800 mb-6 border-b pb-4">1. Xodimga oid ma'lumotlar</h3>
+              
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-2">F.I.Sh (To'liq)</label>
-                  <input 
-                    type="text" 
-                    placeholder="Familiya Ism Sharif" 
-                    value={formData.personal.fullName}
-                    onChange={(e) => setFormData({...formData, personal: {...formData.personal, fullName: e.target.value}})}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-slate-50" 
-                  />
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Identifikatsiya ID-kartasi yoki biometrik pasport ma'lumotlari (seriyasi, raqami, berilgan sanasi)
+                  </label>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      maxLength={9}
+                      placeholder="AA1234567" 
+                      value={formData.personal.passport}
+                      onChange={(e) => setFormData({...formData, personal: {...formData.personal, passport: e.target.value.toUpperCase()}})}
+                      className="w-1/2 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-white uppercase" 
+                    />
+                    <input 
+                      type="date" 
+                      value={formData.personal.passportDate}
+                      onChange={(e) => setFormData({...formData, personal: {...formData.personal, passportDate: e.target.value}})}
+                      className="w-1/2 px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-white" 
+                    />
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">ID-karta yoki Pasport</label>
-                  <input 
-                    type="text" 
-                    maxLength={9}
-                    placeholder="AA1234567" 
-                    value={formData.personal.passport}
-                    onChange={(e) => setFormData({...formData, personal: {...formData.personal, passport: e.target.value.toUpperCase()}})}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-slate-50 uppercase" 
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">JSHSHIR (14 ta raqam)</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">
+                    Jismoniy shaxsning shaxsiy identifikatsiya raqami (JSHSHIR) (mavjud bo'lgan taqdirda)
+                  </label>
                   <input 
                     type="text" 
                     maxLength={14} 
                     placeholder="12345678901234" 
                     value={formData.personal.pinfl}
                     onChange={(e) => setFormData({...formData, personal: {...formData.personal, pinfl: e.target.value.replace(/\D/g, '')}})}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-slate-50" 
+                    className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-white" 
                   />
                 </div>
               </div>
@@ -257,7 +341,10 @@ export default function DeclarationPage() {
           {currentStep === 2 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="flex justify-between items-center mb-6 border-b pb-4">
-                <h2 className="text-xl font-bold text-slate-800">2. Алоқадор шахсга оид маълумотлар (Яқин қариндошлар)</h2>
+                <div>
+                  <h2 className="text-xl font-bold text-slate-800">2. Aloqador shaxsga oid ma'lumotlar*</h2>
+                  <p className="text-sm font-semibold text-slate-500 mt-1">Xodimning yaqin qarindoshiga oid ma'lumotlar</p>
+                </div>
                 <button onClick={addRelative} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors">
                   <Plus className="w-4 h-4" /> Qarindosh qo'shish
                 </button>
@@ -275,7 +362,7 @@ export default function DeclarationPage() {
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                       {/* Qarindoshlik darajasi */}
                       <div className="md:col-span-1">
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Qarindoshlik</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Qarindoshlik</label>
                         <select 
                           value={relative.relationship}
                           onChange={(e) => {
@@ -294,7 +381,7 @@ export default function DeclarationPage() {
 
                       {/* F.I.Sh */}
                       <div className="md:col-span-3">
-                        <label className="block text-xs font-medium text-slate-500 mb-1">F.I.Sh (To'liq)</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">Familiya, ismi, otasining ismi</label>
                         <input 
                           type="text" 
                           placeholder="To'liq ism sharifi" 
@@ -313,25 +400,42 @@ export default function DeclarationPage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* Pasport */}
                       <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">Pasport / ID</label>
-                        <input 
-                          type="text" 
-                          maxLength={9}
-                          placeholder="Seriya va raqam" 
-                          disabled={relative.noInfo}
-                          value={relative.passport}
-                          onChange={(e) => {
-                            const newRels = [...formData.relatives];
-                            newRels[index].passport = e.target.value.toUpperCase();
-                            setFormData({...formData, relatives: newRels});
-                          }}
-                          className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white text-slate-900 uppercase disabled:bg-slate-100 disabled:text-slate-400" 
-                        />
+                        <label className="block text-xs font-bold text-slate-600 mb-1 leading-snug">
+                          Identifikatsiya ID-kartasi yoki biometrik pasport ma'lumotlari (seriyasi, raqami, berilgan sanasi)
+                        </label>
+                        <div className="flex gap-2">
+                          <input 
+                            type="text" 
+                            maxLength={9}
+                            placeholder="Seriya va raqam" 
+                            disabled={relative.noInfo}
+                            value={relative.passport}
+                            onChange={(e) => {
+                              const newRels = [...formData.relatives];
+                              newRels[index].passport = e.target.value.toUpperCase();
+                              setFormData({...formData, relatives: newRels});
+                            }}
+                            className="w-1/2 px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white text-slate-900 uppercase disabled:bg-slate-100 disabled:text-slate-400" 
+                          />
+                          <input 
+                            type="date" 
+                            disabled={relative.noInfo}
+                            value={relative.passportDate}
+                            onChange={(e) => {
+                              const newRels = [...formData.relatives];
+                              newRels[index].passportDate = e.target.value;
+                              setFormData({...formData, relatives: newRels});
+                            }}
+                            className="w-1/2 px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white text-slate-900 disabled:bg-slate-100 disabled:text-slate-400" 
+                          />
+                        </div>
                       </div>
 
                       {/* JSHSHIR */}
                       <div>
-                        <label className="block text-xs font-medium text-slate-500 mb-1">JSHSHIR</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 leading-snug">
+                          Jismoniy shaxsning shaxsiy identifikatsiya raqami (JSHSHIR) (mavjud bo'lgan taqdirda)
+                        </label>
                         <input 
                           type="text" 
                           maxLength={14}
@@ -359,6 +463,7 @@ export default function DeclarationPage() {
                           newRels[index].noInfo = e.target.checked;
                           if(e.target.checked) {
                             newRels[index].passport = '';
+                            newRels[index].passportDate = '';
                             newRels[index].pinfl = '';
                           }
                           setFormData({...formData, relatives: newRels});
@@ -366,13 +471,13 @@ export default function DeclarationPage() {
                         className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-600 cursor-pointer" 
                       />
                       <label htmlFor={`noInfo-${index}`} className="text-sm font-medium text-slate-600 cursor-pointer select-none">
-                        Ma'lumotlarni (Pasport va JSHSHIR) olish imkoniyatiga ega emasman
+                        "Ma'lumotga ega emasman" deb izoh ko'rsatish
                       </label>
                     </div>
 
                     {/* NBU da ishlaydimi Qismi */}
                     <div className="mt-5 pt-4 border-t border-slate-200">
-                      <p className="text-sm font-semibold text-slate-800 mb-3">Sizning bu qarindoshingiz NBU ning biror filialida ishlaydimi?</p>
+                      <p className="text-sm font-bold text-slate-700 mb-3">Ushbu qarindoshingiz NBU tizimida ishlaydimi?</p>
                       <div className="flex items-center gap-6 mb-4">
                         <label className="flex items-center gap-2 cursor-pointer">
                           <input 
@@ -406,12 +511,14 @@ export default function DeclarationPage() {
                         </label>
                       </div>
 
-                      {/* Filial va Lavozim Selectlari */}
+                      {/* Filial va Lavozim INPUTLARI */}
                       {relative.worksAtNBU && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300 bg-blue-50/50 p-4 rounded-lg border border-blue-100">
                           <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Qaysi filialda ishlaydi?</label>
-                            <select 
+                            <label className="block text-xs font-bold text-slate-600 mb-1">Qaysi filialda/BXM da?</label>
+                            <input 
+                              type="text"
+                              placeholder="Filial yoki BXM nomini yozing..."
                               value={relative.nbuBranch}
                               onChange={(e) => {
                                 const newRels = [...formData.relatives];
@@ -419,16 +526,13 @@ export default function DeclarationPage() {
                                 setFormData({...formData, relatives: newRels});
                               }}
                               className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm outline-none focus:border-blue-600 bg-white text-slate-900"
-                            >
-                              <option value="" disabled>Filialni tanlang...</option>
-                              {nbuBranches.map(branch => (
-                                <option key={branch} value={branch}>{branch}</option>
-                              ))}
-                            </select>
+                            />
                           </div>
                           <div>
-                            <label className="block text-xs font-medium text-slate-600 mb-1">Qaysi lavozimda?</label>
-                            <select 
+                            <label className="block text-xs font-bold text-slate-600 mb-1">Qaysi lavozimda?</label>
+                            <input 
+                              type="text"
+                              placeholder="Lavozimini yozing..."
                               value={relative.nbuPosition}
                               onChange={(e) => {
                                 const newRels = [...formData.relatives];
@@ -436,20 +540,16 @@ export default function DeclarationPage() {
                                 setFormData({...formData, relatives: newRels});
                               }}
                               className="w-full px-3 py-2 border border-blue-200 rounded-md text-sm outline-none focus:border-blue-600 bg-white text-slate-900"
-                            >
-                              <option value="" disabled>Lavozimni tanlang...</option>
-                              {nbuPositions.map(pos => (
-                                <option key={pos} value={pos}>{pos}</option>
-                              ))}
-                            </select>
+                            />
                           </div>
                         </div>
                       )}
                     </div>
-
                   </div>
                 ))}
               </div>
+
+              {renderFootnote()}
             </div>
           )}
 
@@ -459,9 +559,11 @@ export default function DeclarationPage() {
               
               {/* O'zining kompaniyalari */}
               <div>
-                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-2">
-                  <h2 className="text-lg font-bold text-slate-800">Sizga aloqador yuridik shaxslar</h2>
-                  <button onClick={() => addCompany('myCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors">
+                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-4">
+                  <h2 className="text-sm font-bold text-slate-800 leading-relaxed md:w-3/4">
+                    Xodim qaysi yuridik shaxsning ustav fondi (ustav kapitali) aksiyalariga yoki ulushlariga egalik qilsa yoxud unda boshqaruv organining rahbari yoki a'zosi bo'lsa, o'sha yuridik shaxsga oid ma'lumotlar
+                  </h2>
+                  <button onClick={() => addCompany('myCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
                     <Plus className="w-4 h-4" /> Qo'shish
                   </button>
                 </div>
@@ -471,7 +573,7 @@ export default function DeclarationPage() {
                     <div key={idx} className="flex flex-col gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-200 transition-all">
                       <div className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="flex-1 w-full">
-                          <label className="block text-xs font-medium text-slate-500 mb-1">Yuridik shaxs nomi</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Yuridik shaxsning nomi</label>
                           <input 
                             type="text" 
                             placeholder="Kompaniya nomi"
@@ -485,7 +587,7 @@ export default function DeclarationPage() {
                           />
                         </div>
                         <div className="w-full md:w-1/3">
-                          <label className="block text-xs font-medium text-slate-500 mb-1">STIR (INN)</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Soliq to'lovchining identifikatsiya raqami (STIR)</label>
                           <input 
                             type="text" 
                             maxLength={9} 
@@ -506,7 +608,6 @@ export default function DeclarationPage() {
                         )}
                       </div>
 
-                      {/* MA'LUMOTGA EGA EMASMAN CHECKBOX */}
                       <div className="mt-2">
                         <label className="flex items-center gap-2 cursor-pointer w-max">
                           <input 
@@ -524,15 +625,14 @@ export default function DeclarationPage() {
                             }} 
                             className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-600 cursor-pointer" 
                           />
-                          <span className="text-sm font-medium text-slate-600">Quyidagi ma'lumotlarga ega emasman</span>
+                          <span className="text-sm font-medium text-slate-600">"Ma'lumotga ega emasman" deb izoh ko'rsatish</span>
                         </label>
                       </div>
 
-                      {/* RAHBARLIK VA FOIZ (CHECKBOX BELGILANMASA CHIQADI) */}
                       {!comp.noDetails && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1 border-t border-slate-200 pt-4">
                           <div>
-                            <p className="text-xs font-medium text-slate-600 mb-2">Tashkilotning rahbari yoki a'zosimisiz?</p>
+                            <p className="text-xs font-bold text-slate-600 mb-2">Boshqaruv organining rahbari yoki a'zosimisiz?</p>
                             <div className="flex gap-4">
                               <label className="flex items-center gap-2 cursor-pointer">
                                 <input 
@@ -567,10 +667,9 @@ export default function DeclarationPage() {
                               </label>
                             </div>
 
-                            {/* AGAR "HA" BO'LSA YANGI SELECT CHIQADI */}
                             {comp.isLeader === 'Ha' && (
                               <div className="mt-3 animate-in fade-in slide-in-from-top-1">
-                                <label className="block text-xs font-medium text-slate-500 mb-1">Lavozimingiz / Holatingiz?</label>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Lavozimingiz / Holatingiz?</label>
                                 <select 
                                   value={comp.roleInCompany}
                                   onChange={e => {
@@ -589,7 +688,7 @@ export default function DeclarationPage() {
                             )}
                           </div>
                           <div>
-                            <p className="text-xs font-medium text-slate-600 mb-1">Ushbu korxonaning necha foiziga egalik qilasiz?</p>
+                            <p className="text-xs font-bold text-slate-600 mb-1">Aksiyalariga yoki ulushlariga egalik qilasizmi (foizda)?</p>
                             <div className="relative w-32">
                               <input 
                                 type="number" 
@@ -604,7 +703,7 @@ export default function DeclarationPage() {
                                 }} 
                                 className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 pr-8 bg-white text-slate-900" 
                               />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">%</span>
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
                             </div>
                           </div>
                         </div>
@@ -616,9 +715,11 @@ export default function DeclarationPage() {
 
               {/* Qarindoshning kompaniyalari */}
               <div>
-                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-2">
-                  <h2 className="text-lg font-bold text-slate-800">Qarindoshingizga aloqador yuridik shaxslar</h2>
-                  <button onClick={() => addCompany('relativeCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors">
+                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-4">
+                  <h2 className="text-sm font-bold text-slate-800 leading-relaxed md:w-3/4">
+                    Xodimning yaqin qarindoshi qaysi yuridik shaxsning ustav fondi (ustav kapitali) aksiyalariga yoki ulushlariga egalik qilsa yoxud unda boshqaruv organining rahbari yoki a'zosi bo'lsa, o'sha yuridik shaxsga oid ma'lumotlar
+                  </h2>
+                  <button onClick={() => addCompany('relativeCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
                     <Plus className="w-4 h-4" /> Qo'shish
                   </button>
                 </div>
@@ -629,7 +730,7 @@ export default function DeclarationPage() {
                       
                       <div className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="w-full md:w-1/3">
-                          <label className="block text-xs font-medium text-slate-500 mb-1">Qaysi qarindoshingiz?</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Qaysi qarindoshingiz?</label>
                           <select 
                             value={comp.relativeName}
                             onChange={(e) => {
@@ -649,7 +750,7 @@ export default function DeclarationPage() {
                           </select>
                         </div>
                         <div className="w-full md:w-1/3">
-                          <label className="block text-xs font-medium text-slate-500 mb-1">Yuridik shaxs nomi</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Yuridik shaxsning nomi</label>
                           <input 
                             type="text" 
                             placeholder="Kompaniya nomi"
@@ -663,7 +764,7 @@ export default function DeclarationPage() {
                           />
                         </div>
                         <div className="w-full md:w-1/4">
-                          <label className="block text-xs font-medium text-slate-500 mb-1">STIR (INN)</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">Soliq to'lovchining identifikatsiya raqami (STIR)</label>
                           <input 
                             type="text" 
                             maxLength={9} 
@@ -684,7 +785,6 @@ export default function DeclarationPage() {
                         )}
                       </div>
 
-                      {/* MA'LUMOTGA EGA EMASMAN CHECKBOX */}
                       <div className="mt-2">
                         <label className="flex items-center gap-2 cursor-pointer w-max">
                           <input 
@@ -702,15 +802,14 @@ export default function DeclarationPage() {
                             }} 
                             className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-600 cursor-pointer" 
                           />
-                          <span className="text-sm font-medium text-slate-600">Quyidagi ma'lumotlarga ega emasman</span>
+                          <span className="text-sm font-medium text-slate-600">"Ma'lumotga ega emasman" deb izoh ko'rsatish</span>
                         </label>
                       </div>
 
-                      {/* RAHBARLIK VA FOIZ (CHECKBOX BELGILANMASA CHIQADI) */}
                       {!comp.noDetails && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-1 border-t border-slate-200 pt-4">
                           <div>
-                            <p className="text-xs font-medium text-slate-600 mb-2">Qarindoshingiz tashkilotning rahbari yoki a'zosimi?</p>
+                            <p className="text-xs font-bold text-slate-600 mb-2">Qarindoshingiz tashkilotning rahbari yoki a'zosimi?</p>
                             <div className="flex gap-4">
                               <label className="flex items-center gap-2 cursor-pointer">
                                 <input 
@@ -745,10 +844,9 @@ export default function DeclarationPage() {
                               </label>
                             </div>
 
-                            {/* AGAR "HA" BO'LSA YANGI SELECT CHIQADI */}
                             {comp.isLeader === 'Ha' && (
                               <div className="mt-3 animate-in fade-in slide-in-from-top-1">
-                                <label className="block text-xs font-medium text-slate-500 mb-1">Qarindoshingiz roli qanday?</label>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Qarindoshingiz roli qanday?</label>
                                 <select 
                                   value={comp.roleInCompany}
                                   onChange={e => {
@@ -767,7 +865,7 @@ export default function DeclarationPage() {
                             )}
                           </div>
                           <div>
-                            <p className="text-xs font-medium text-slate-600 mb-1">Ushbu korxonaning necha foiziga egalik qiladi?</p>
+                            <p className="text-xs font-bold text-slate-600 mb-1">Aksiyalariga yoki ulushlariga egalik qiladimi (foizda)?</p>
                             <div className="relative w-32">
                               <input 
                                 type="number" 
@@ -782,7 +880,7 @@ export default function DeclarationPage() {
                                 }} 
                                 className="w-full px-3 py-1.5 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 pr-8 bg-white text-slate-900" 
                               />
-                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-medium">%</span>
+                              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
                             </div>
                           </div>
                         </div>
@@ -792,16 +890,17 @@ export default function DeclarationPage() {
                   ))}
                 </div>
               </div>
+
+              {renderFootnote()}
             </div>
           )}
 
           {/* 4-QADAM: Tasdiqlash */}
           {currentStep === 4 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <h2 className="text-xl font-bold text-slate-800 mb-6 border-b pb-4">3. Эҳтимолий манфаатлар тўқнашуви тўғрисида маълумот</h2>
               
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Mavjud yoki ehtimoliy manfaatlar to'qnashuvini batafsil yozing:</label>
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-slate-800 mb-4 border-b pb-4">3. Ehtimoliy manfaatlar to'qnashuvi to'g'risidagi ma'lumot</h2>
                 <textarea 
                   rows={4} 
                   value={formData.conflictInfo}
@@ -811,15 +910,18 @@ export default function DeclarationPage() {
                 ></textarea>
               </div>
 
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-slate-700 mb-2">Қўшимча маълумотлар (агар мавжуд бўлса):</label>
+              <div className="mb-8">
+                <h2 className="text-xl font-bold text-slate-800 mb-4 border-b pb-4 leading-snug">4. Ehtimoliy manfaatlar to'qnashuvi to'g'risidagi deklaratsiyada ko'rsatilishi kerak bo'lgan ma'lumotlardan tashqari qo'shimcha ma'lumotlar (agar mavjud bo'lsa)</h2>
                 <textarea 
                   rows={3} 
                   value={formData.additionalInfo}
                   onChange={(e) => setFormData({...formData, additionalInfo: e.target.value})}
-                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-slate-50 resize-none"
-                  placeholder="Xodim tomonidan manfaatlar to'qnashuvi vaziyati sifatida baholanadigan boshqa holatlar..."
+                  className="w-full px-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-600 outline-none text-slate-900 bg-slate-50 resize-none mb-2"
+                  placeholder="Qo'shimcha ma'lumotlar..."
                 ></textarea>
+                <p className="text-xs text-slate-500 italic">
+                  (xodim tomonidan manfaatlar to'qnashuvi vaziyati sifatida baholanadigan boshqa holatlar ko'rsatiladi)
+                </p>
               </div>
 
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex gap-4">
