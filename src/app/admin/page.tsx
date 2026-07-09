@@ -223,14 +223,14 @@ export default function AdminDashboard() {
       <main className="flex-1 ml-0 md:ml-64 flex flex-col h-screen overflow-y-auto">
         
         {/* HEADER */}
-        <header className="min-h-[60px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-50 shadow-sm">
+        <header className="min-h-[64px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-50 shadow-sm">
           <div className="flex items-center gap-3">
-            <Activity className="w-5 h-5 text-blue-600" />
-            <h1 className="text-xl font-bold text-slate-800">Korporativ Dashboard</h1>
+            {/* <Activity className="w-5 h-5 text-blue-600" /> */}
+            <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <div className="text-right">
-              <p className="font-semibold text-slate-900">Rustamov Otabek</p>
+              <p className="font-semibold text-slate-900">Hasan Turaevich</p>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider">BKR Bosh mutaxassis</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center border border-slate-300">

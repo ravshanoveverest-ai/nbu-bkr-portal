@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
@@ -14,6 +14,12 @@ export default function DeclarationPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [isAutofilled, setIsAutofilled] = useState(false);
+  const [isLoading, setIsLoading] = useState(false); // Yuborilayotgan holat uchun
+
+  // === IMZO (SIGNATURE) UCHUN STATE VA REF ===
+  const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [hasSignature, setHasSignature] = useState(false);
 
   // Deklaratsiya Form State
   const [formData, setFormData] = useState({
@@ -51,6 +57,79 @@ export default function DeclarationPage() {
   const passportRegex = /^[a-zA-Z]{2}\d{7}$/;
   const pinflRegex = /^\d{14}$/;
   const stirRegex = /^\d{9}$/;
+
+  // === IMZO FUNKSIYALARI ===
+  useEffect(() => {
+    const canvas = signatureCanvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.strokeStyle = '#0A2540'; // To'q ko'k ruchka
+      }
+    }
+  }, [currentStep]);
+
+  const getCoordinates = (e: React.MouseEvent | React.TouchEvent) => {
+    const canvas = signatureCanvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    
+    if (e.type.includes('touch')) {
+      const touch = (e as React.TouchEvent).touches[0];
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top
+      };
+    } else {
+      const mouse = e as React.MouseEvent;
+      return {
+        x: mouse.clientX - rect.left,
+        y: mouse.clientY - rect.top
+      };
+    }
+  };
+
+  const startDrawing = (e: React.MouseEvent | React.TouchEvent) => {
+    setIsDrawing(true);
+    setHasSignature(true);
+    const { x, y } = getCoordinates(e);
+    const ctx = signatureCanvasRef.current?.getContext('2d');
+    if (ctx) {
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+    }
+  };
+
+  const draw = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isDrawing) return;
+    const { x, y } = getCoordinates(e);
+    const ctx = signatureCanvasRef.current?.getContext('2d');
+    if (ctx) {
+      ctx.lineTo(x, y);
+      ctx.stroke();
+    }
+  };
+
+  const stopDrawing = () => {
+    setIsDrawing(false);
+    const ctx = signatureCanvasRef.current?.getContext('2d');
+    if (ctx) {
+      ctx.closePath();
+    }
+  };
+
+  const clearSignature = () => {
+    const canvas = signatureCanvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (canvas && ctx) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setHasSignature(false);
+    }
+  };
+  // ==========================
 
   const validateStep = () => {
     const newErrors: string[] = [];
@@ -103,9 +182,16 @@ export default function DeclarationPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (validateStep()) {
-      console.log("Yuborilayotgan ma'lumotlar: ", formData);
-      setShowSuccessModal(true);
+    if (validateStep() && hasSignature) {
+      setIsLoading(true);
+      // Imzoni Base64 formatda olish
+      const signatureImage = signatureCanvasRef.current?.toDataURL('image/png');
+      
+      setTimeout(() => {
+        console.log("Yuborilayotgan ma'lumotlar: ", { ...formData, signature: signatureImage });
+        setIsLoading(false);
+        setShowSuccessModal(true);
+      }, 1500);
     }
   };
 
@@ -936,28 +1022,63 @@ export default function DeclarationPage() {
         </div>
 
         {/* Harakat tugmalari */}
-        <div className="mt-8 flex items-center justify-between">
+        <div className="mt-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+          
           <button 
             onClick={() => {setCurrentStep((prev) => Math.max(prev - 1, 1)); setErrors([]);}}
-            className={`px-6 py-3 rounded-lg font-medium flex items-center gap-2 transition-colors ${currentStep === 1 ? 'invisible' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 shadow-sm'}`}
+            className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${currentStep === 1 ? 'invisible' : 'bg-white border-2 border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300 shadow-sm'}`}
           >
-            <ArrowLeft className="w-4 h-4" /> Orqaga
+            <ArrowLeft className="w-5 h-5" /> Orqaga
           </button>
 
           {currentStep < 4 ? (
             <button 
               onClick={handleNext}
-              className="px-6 py-3 rounded-lg font-medium flex items-center gap-2 bg-[#0A2540] text-white hover:bg-[#113559] transition-colors shadow-sm"
+              className="px-8 py-3 rounded-xl font-bold flex items-center gap-2 bg-[#0A2540] text-white hover:bg-[#113559] transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5"
             >
-              Keyingisi <ArrowRight className="w-4 h-4" />
+              Keyingisi <ArrowRight className="w-5 h-5" />
             </button>
           ) : (
-            <button 
-              onClick={handleSubmit}
-              className="px-8 py-3 rounded-lg font-medium flex items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-600/20"
-            >
-              <CheckCircle className="w-4 h-4" /> Deklaratsiyani Imzolash
-            </button>
+            <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto mt-6 sm:mt-0">
+              
+              {/* IMZO QO'YISH MAYDONI */}
+              <div className="flex flex-col items-center">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Shu yerga imzo qo'ying</p>
+                <div className="relative bg-white border-2 border-dashed border-blue-300 rounded-xl overflow-hidden shadow-inner group hover:border-blue-400 transition-colors">
+                  {!hasSignature && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                      <span className="font-serif italic text-2xl text-slate-400 select-none">Imzo...</span>
+                    </div>
+                  )}
+                  <canvas
+                    ref={signatureCanvasRef}
+                    width={280}
+                    height={90}
+                    className="touch-none cursor-crosshair block bg-white"
+                    onMouseDown={startDrawing}
+                    onMouseMove={draw}
+                    onMouseUp={stopDrawing}
+                    onMouseLeave={stopDrawing}
+                    onTouchStart={startDrawing}
+                    onTouchMove={draw}
+                    onTouchEnd={stopDrawing}
+                  />
+                </div>
+                {hasSignature && (
+                  <button onClick={clearSignature} className="text-xs font-bold text-red-500 hover:text-red-700 mt-2 transition-colors">
+                    Qaytadan qo'yish
+                  </button>
+                )}
+              </div>
+
+              <button 
+                onClick={handleSubmit}
+                disabled={isLoading || !hasSignature}
+                className="px-8 py-4 w-full md:w-auto rounded-xl font-bold flex justify-center items-center gap-2 bg-emerald-600 text-white hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-600/30 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 hover:-translate-y-0.5"
+              >
+                {isLoading ? 'Yuborilmoqda...' : <><CheckCircle className="w-5 h-5" /> Deklaratsiyani Imzolash</>}
+              </button>
+            </div>
           )}
         </div>
       </main>

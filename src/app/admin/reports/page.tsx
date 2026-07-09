@@ -290,7 +290,7 @@ export default function ReportsPage() {
       
       {/* SIDEBAR */}
       <aside className="w-64 bg-[#0A2540] text-slate-300 flex flex-col hidden md:flex fixed h-full z-20">
-        <div className="h-20 flex items-center px-6 bg-[#071d33] border-b border-slate-700/50">
+        <div className="h-16 flex items-center px-6 bg-[#071d33] border-b border-slate-700/50">
           <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#0A2540] font-bold text-xs mr-3 shadow-sm">NBU</div>
           <span className="text-white font-semibold tracking-wide">BKR Admin</span>
         </div>
@@ -323,15 +323,15 @@ export default function ReportsPage() {
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 ml-0 md:ml-64 flex flex-col h-screen overflow-y-auto">
-        <header className="min-h-[76px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-50 shadow-sm">
+      <main className="flex-1 ml-0 md:ml-63 flex flex-col h-screen overflow-y-auto">
+        <header className="min-h-[64px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 shadow-sm">
           <div className="flex items-center gap-3">
-            <FileBarChart className="w-5 h-5 text-blue-600" />
+            {/* <FileBarChart className="w-5 h-5 text-blue-600" /> */}
             <h1 className="text-xl font-bold text-slate-800">Tahliliy Hisobotlar</h1>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <div className="text-right">
-              <p className="font-bold text-slate-900">Rustamov Otabek</p>
+              <p className="font-bold text-slate-900">Hasan Turaevich</p>
               <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">BKR Bosh mutaxassis</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center border border-slate-300">
@@ -365,7 +365,7 @@ export default function ReportsPage() {
               disabled={isDownloading}
               className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isDownloading ? 'Hujjat tayyorlanmoqda...' : <><Download className="w-5 h-5" /> Word formatida yuklash</>}
+              {isDownloading ? 'Hujjat tayyorlanmoqda...' : <><Download className="w-5 h-5" /> Hisobotni yuklash</>}
             </button>
           </div>
 
