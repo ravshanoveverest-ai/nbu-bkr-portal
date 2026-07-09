@@ -321,11 +321,14 @@ export default function DeclarationsPage() {
           <Link href="/admin/users" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <Users className="w-5 h-5" /> Xodimlar bazasi
           </Link>
-        </nav>
-        <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
+          <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
           </Link>
+        </nav>
         <div className="p-4 border-t border-slate-700/50">
+        <Link href="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors mb-2">
+            <Settings className="w-5 h-5" /> Sozlamalar
+          </Link>
           <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
             <LogOut className="w-5 h-5" /> Chiqish
           </button>
