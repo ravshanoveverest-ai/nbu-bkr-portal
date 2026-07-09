@@ -34,7 +34,7 @@ export default function ReportsPage() {
   const currentData = reportDataStore[period];
   const submittedPercent = Math.round((currentData.submitted / currentData.total) * 100);
 
-  // --- SVG NI PNG GA O'GIRISH (Html2Canvas'siz Toza Usul) ---
+  // --- SVG NI PNG GA O'GIRISH ---
   const svgToPngBase64 = (svgString: string, width: number, height: number): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new window.Image();
@@ -43,7 +43,7 @@ export default function ReportsPage() {
       
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = width * 2; // Tiniqlik uchun 2x kattalashtirish
+        canvas.width = width * 2; 
         canvas.height = height * 2;
         const ctx = canvas.getContext('2d');
         if (ctx) {
@@ -62,7 +62,6 @@ export default function ReportsPage() {
     });
   };
 
-  // Base64 dan Uint8Array ga o'tkazish (yangi docx versiyasi uchun)
   const base64ToUint8Array = (base64: string) => {
     const binaryString = window.atob(base64);
     const bytes = new Uint8Array(binaryString.length);
@@ -76,7 +75,6 @@ export default function ReportsPage() {
   const downloadReport = async () => {
     setIsDownloading(true);
     try {
-      // 1. DUMALOQ (PIE) CHART SVG KODI (Yozuv ustiga chiqmasligi uchun bo'yi 280 qilib pastga surildi)
       const r = 70;
       const c = 2 * Math.PI * r;
       const dash = (submittedPercent / 100) * c;
@@ -99,7 +97,6 @@ export default function ReportsPage() {
         </svg>
       `;
 
-      // 2. USTUNLI (BAR) CHART SVG KODI
       const maxVal = Math.max(currentData.relatives, currentData.subordination, currentData.shares, currentData.relativeShares);
       const barSvg = `
         <svg width="700" height="250" xmlns="http://www.w3.org/2000/svg">
@@ -140,7 +137,6 @@ export default function ReportsPage() {
       const pieUint8 = base64ToUint8Array(pieImgData);
       const barUint8 = base64ToUint8Array(barImgData);
 
-      // 3. Word Paragraf Yordamchilari (TS xatolarisiz string literallari bilan)
       const p = (text: string, bold = false, align: any = "both", indent = 708) => new Paragraph({
         alignment: align,
         spacing: { line: 360, before: 60, after: 60 },
@@ -158,7 +154,6 @@ export default function ReportsPage() {
       const tblBorder = { style: "single" as any, size: 1, color: "000000" };
       const noBorder = { style: "none" as any, size: 0, color: "FFFFFF" };
 
-      // 4. Word hujjatini tuzish
       const doc = new Document({
         sections: [{
           properties: {},
@@ -216,10 +211,10 @@ export default function ReportsPage() {
 
             new Paragraph({ spacing: { before: 300 } }),
 
-            // PIE CHART RASMI
+            // PIE CHART RASMI (TS XATOLIGI BO'LMASLIGI UCHUN AS ANY)
             new Paragraph({
               alignment: "center" as any,
-              children: [new ImageRun({ data: pieUint8, transformation: { width: 450, height: 210 } })]
+              children: [new ImageRun({ data: pieUint8, type: "png", transformation: { width: 450, height: 210 } } as any)]
             }),
 
             new Paragraph({ spacing: { before: 300 } }),
@@ -228,15 +223,14 @@ export default function ReportsPage() {
 
             new Paragraph({ spacing: { before: 200 } }),
 
-            // BAR CHART RASMI
+            // BAR CHART RASMI (TS XATOLIGI BO'LMASLIGI UCHUN AS ANY)
             new Paragraph({
               alignment: "center" as any,
-              children: [new ImageRun({ data: barUint8, transformation: { width: 550, height: 196 } })]
+              children: [new ImageRun({ data: barUint8, type: "png", transformation: { width: 550, height: 196 } } as any)]
             }),
 
             new Paragraph({ spacing: { before: 200 } }),
 
-            // User so'ragan aniq textlar
             bullet(`${currentData.relatives} nafar xodimning Bank tizimida mehnat faoliyatini amalga oshirayotgan yaqin qarindoshlari mavjudligi;`),
             bullet(`mazkur holatlarni o'rganish natijasida ${currentData.subordination} ta holatda xodimlar o'rtasida bevosita bo'ysunuv munosabatlari mavjudligi aniqlanib, ular mavjud manfaatlar to'qnashuvi sifatida baholandi hamda Odob-axloq komissiyasining qarori asosida belgilangan tartibda bartaraf etildi;`),
             bullet(`${currentData.shares} nafar xodimning yuridik shaxslar ustav fondida ulush yoki aksiyalarga egaligi yoxud ularning boshqaruv organlari tarkibida ishtirok etishi mavjudligi;`),
@@ -285,7 +279,7 @@ export default function ReportsPage() {
 
     } catch (error) {
       console.error("Xatolik:", error);
-      alert("Hisobotni yuklashda xatolik yuz berdi.");
+      alert("Hisobotni yuklashda xatolik yuz berdi. Kutubxonalar o'rnatilganiga ishonch hosil qiling.");
     } finally {
       setIsDownloading(false);
     }
@@ -316,7 +310,6 @@ export default function ReportsPage() {
           <Link href="/admin/users" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <Users className="w-5 h-5" /> Xodimlar bazasi
           </Link>
-          {/* HISOBOTLAR MENYUSI ANIYQ KO'RINIB TURADI */}
           <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 font-bold rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
           </Link>
