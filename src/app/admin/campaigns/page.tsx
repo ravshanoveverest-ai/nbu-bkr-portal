@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   Settings, LogOut, Plus, Trash2, CheckCircle, XCircle, 
-  Clock, AlertCircle, User, ChevronDown, ChevronUp, AlertOctagon
+  Clock, AlertCircle, User, ChevronDown, ChevronUp, AlertOctagon,
+  FileBarChart
 } from 'lucide-react';
 
 // Namunaviy kampaniyalar va HUDUDLAR KESIMIDAGI STATISTIKA
@@ -168,7 +169,9 @@ export default function CampaignsPage() {
             <Users className="w-5 h-5" /> Xodimlar bazasi
           </Link>
         </nav>
-
+        <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
+            <FileBarChart className="w-5 h-5" /> Hisobotlar
+          </Link>
         <div className="p-4 border-t border-slate-700/50">
           <Link href="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors mb-2">
             <Settings className="w-5 h-5" /> Sozlamalar
