@@ -1,98 +1,211 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+const ImageModule = require('docxtemplater-image-module-free');
+import { saveAs } from 'file-saver';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   Settings, LogOut, Search, Filter, AlertTriangle, 
   CheckCircle, ChevronDown, Eye, User, X, MessageSquareWarning,
-  Clock, FileCheck,
-  FileBarChart
+  Clock, FileCheck, FileBarChart, Download
 } from 'lucide-react';
 
-// MVP uchun Xabarnomalar (Notifications) namunaviy bazasi
-const mockNotifications = [
-  { 
-    id: 1, 
-    name: "Olimjonov Sardor", 
-    region: "Andijon viloyati", 
-    date: "2024-02-16", 
-    status: "new", 
-    message: "Filialimizga mijoz sifatida kelgan MCHJ rahbari mening amakim bo'lib chiqdi. Kredit ajratish komissiyasida qatnashishim manfaatlar to'qnashuviga olib kelishi mumkin.",
-    resolution: "",
-    registryNumber: ""
-  },
-  { 
-    id: 2, 
-    name: "Karimov Aziz", 
-    region: "Bosh ofis", 
-    date: "2024-02-15", 
-    status: "new", 
-    message: "Bankning yuridik bo'limiga yangi ishga olingan xodim mening xotinim. Garchi bo'limlarimiz boshqa-boshqa bo'lsa ham, xabardor qilib qo'ymoqchiman.",
-    resolution: "",
-    registryNumber: ""
-  },
-  { 
-    id: 3, 
-    name: "Usmonova Nilufar", 
-    region: "Toshkent shahar", 
-    date: "2024-02-15", 
-    status: "new", 
-    message: "Hamkor kompaniyalardan birida ta'sischilar o'zgarib, mening uzoq qarindoshim ustav kapitaliga kiribdi. Bu kompaniya bankimizga xizmat ko'rsatadi.",
-    resolution: "",
-    registryNumber: ""
-  },
-  { 
-    id: 4, 
-    name: "Tursunov Bekzod", 
-    region: "Buxoro viloyati", 
-    date: "2024-02-10", 
-    status: "reviewed", 
-    message: "Tender jarayonida ishtirok etayotgan ta'minotchilardan biri sobiq kursdoshim ekanligini ma'lum qilaman.",
-    resolution: "Tender komissiyasi tarkibidan xodim vaqtincha chetlatildi. Jarayon shaffofligi ta'minlandi.",
-    registryNumber: "BKR-2024/045"
+function base64DataURLToArrayBuffer(dataURL: string) {
+  const base64Regex = /^data:image\/(png|jpg|jpeg|svg|svg\+xml);base64,/;
+  if (!base64Regex.test(dataURL)) return false;
+  const stringBase64 = dataURL.replace(base64Regex, "");
+  let binaryString;
+  if (typeof window !== "undefined") {
+    binaryString = window.atob(stringBase64);
+  } else {
+    binaryString = Buffer.from(stringBase64, "base64").toString("binary");
   }
-];
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedNotification, setSelectedNotification] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Rezolyutsiya (Chora) va Reestr raqamini yozish uchun state
   const [resolutionText, setResolutionText] = useState("");
   const [registryNum, setRegistryNum] = useState("");
 
+  const adminName = "Hasan Turaevich";
+  const adminRole = "BKR Bosh mutaxassis";
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    setIsLoading(true);
+    try {
+      // Backend API'dan xabarnomalarni olish
+      const res = await fetch('https://nbu-bkr-api.onrender.com/api/notifications');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+      }
+    } catch (error) {
+      console.error("Xabarnomalarni yuklashda xato:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const filteredData = notifications.filter(item => {
     const matchStatus = statusFilter === "all" || item.status === statusFilter;
-    const matchSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchSearch = (item.fullName || item.name || '').toLowerCase().includes(searchQuery.toLowerCase());
     return matchStatus && matchSearch;
   });
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!resolutionText || !registryNum) {
       alert("Iltimos, ko'rilgan chora va reestr raqamini kiriting!");
       return;
     }
 
-    // Xabarnoma statusini yangilash
-    const updatedNotifications = notifications.map(notif => 
-      notif.id === selectedNotification.id 
-        ? { ...notif, status: "reviewed", resolution: resolutionText, registryNumber: registryNum }
-        : notif
-    );
-    
-    setNotifications(updatedNotifications);
-    setSelectedNotification(null);
-    setResolutionText("");
-    setRegistryNum("");
+    try {
+      // Backendga saqlash (Tasdiqlash)
+      const res = await fetch(`https://nbu-bkr-api.onrender.com/api/notifications/${selectedNotification._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: 'reviewed',
+          resolution: resolutionText,
+          registryNumber: registryNum
+        })
+      });
+
+      if (res.ok) {
+        // Mahalliy stateni yangilash
+        const updatedNotifications = notifications.map(notif => 
+          notif._id === selectedNotification._id 
+            ? { ...notif, status: "reviewed", resolution: resolutionText, registryNumber: registryNum }
+            : notif
+        );
+        setNotifications(updatedNotifications);
+        setSelectedNotification(null);
+        setResolutionText("");
+        setRegistryNum("");
+      }
+    } catch (error) {
+      console.error("Tasdiqlashda xato:", error);
+      alert("Xabarnomani tasdiqlashda xatolik yuz berdi.");
+    }
   };
 
   const openModal = (item: any) => {
     setSelectedNotification(item);
     setResolutionText(item.resolution || "");
     setRegistryNum(item.registryNumber || "");
+  };
+
+// --- DOCX YUKLASH FUNKSIYASI ---
+  const handleDownloadWord = async (item: any) => {
+    try {
+      const response = await fetch('/notification_template.docx');
+      if (!response.ok) {
+        alert("notification_template.docx fayli public papkada topilmadi!");
+        return;
+      }
+      const content = await response.arrayBuffer();
+      const zip = new PizZip(content);
+
+      const imageOptions = {
+        centered: true,
+        getImage: function(tagValue: any) {
+          return base64DataURLToArrayBuffer(tagValue);
+        },
+        getSize: function() {
+          return [140, 45]; // Imzoning razmeri
+        }
+      };
+      const imageModule = new ImageModule(imageOptions);
+
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        modules: [imageModule]
+      });
+
+      const fallbackImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+      // Xodim yuborgan barcha datani o'qib olish
+      const fullData = item.fullData || {};
+      const personal = fullData.personal || {};
+      const header = fullData.header || {};
+
+      // Qarindoshlar
+      const relativesData = fullData.relatives?.length > 0
+        ? fullData.relatives.map((r: any) => ({
+            relName: r.fullName || "-",
+            relRel: r.relationship || "-",
+            relPass: r.noInfo ? "Маълумотга эга эмасман" : `${r.passport || '-'} (${r.passportDate || ''})`,
+            relPinfl: r.noInfo ? "Маълумотга эга эмасман" : (r.pinfl || "-")
+        }))
+        : [{ relName: "-", relRel: "-", relPass: "-", relPinfl: "-" }];
+
+      // O'zining kompaniyalari
+      const myCompsData = fullData.myCompanies?.length > 0
+        ? fullData.myCompanies.map((c: any) => ({
+            compName: c.companyName || "-",
+            compStir: c.stir || "-"
+        }))
+        : [{ compName: "-", compStir: "-" }];
+
+      // Qarindosh kompaniyalari
+      const relCompsData = fullData.relativeCompanies?.length > 0
+        ? fullData.relativeCompanies.map((c: any) => ({
+            relName: c.relativeName || "-",
+            compName: c.companyName || "-",
+            compStir: c.stir || "-"
+        }))
+        : [{ relName: "-", compName: "-", compStir: "-" }];
+
+      // Word ga yuboriladigan yakuniy data
+      const data = {
+        department: header.department || item.branch || "-",
+        managerInfo: header.managerInfo || "-",
+        employeeInfo: header.employeeInfo || item.fullName || "-",
+        passport: personal.passport ? `${personal.passport} (${personal.passportDate})` : "-",
+        pinfl: personal.pinfl || "-",
+        
+        relatives: relativesData,
+        myComps: myCompsData,
+        relComps: relCompsData,
+        
+        conflictInfo: item.message || fullData.conflictInfo || "-",
+        position: "", 
+        fullName: item.fullName || item.name || "",
+        date: new Date(item.createdAt || item.date || Date.now()).toLocaleDateString('uz-UZ').replace(/\//g, '.'),
+        signature: item.signature || fallbackImage,
+      };
+
+      doc.render(data);
+
+      const out = doc.getZip().generate({
+        type: "blob",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      saveAs(out, `Xabarnoma_${data.fullName.replace(/\s+/g, '_')}.docx`);
+
+    } catch (error) {
+      console.error("DOCX xato:", error);
+      alert("DOCX yaratishda xato yuz berdi!");
+    }
   };
 
   return (
@@ -107,13 +220,21 @@ export default function NotificationsPage() {
               <div className="flex items-center gap-3">
                 <MessageSquareWarning className="w-6 h-6 text-amber-400" />
                 <div>
-                  <h2 className="text-xl font-bold text-white tracking-wide">Xabarnoma #{selectedNotification.id}</h2>
-                  <p className="text-sm text-slate-300 mt-1">{selectedNotification.name} | {selectedNotification.region} | {selectedNotification.date}</p>
+                  <h2 className="text-xl font-bold text-white tracking-wide">Xabarnoma yozishmalari</h2>
+                  <p className="text-sm text-slate-300 mt-1">{selectedNotification.fullName || selectedNotification.name} | {selectedNotification.branch || selectedNotification.region}</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedNotification(null)} className="p-2 text-slate-300 hover:bg-white/10 hover:text-white rounded-full transition-colors">
-                <X className="w-6 h-6" />
-              </button>
+              <div className="flex items-center gap-3">
+                <button 
+                  onClick={() => handleDownloadWord(selectedNotification)}
+                  className="hidden sm:flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold transition-colors border border-white/20"
+                >
+                  <Download className="w-4 h-4" /> Word formatda yuklash
+                </button>
+                <button onClick={() => setSelectedNotification(null)} className="p-2 text-slate-300 hover:bg-white/10 hover:text-white rounded-full transition-colors">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
             </div>
             
             {/* Modal Body */}
@@ -173,21 +294,29 @@ export default function NotificationsPage() {
             </div>
             
             {/* Modal Footer */}
-            <div className="p-5 border-t border-slate-200 bg-[#F8FAFC] flex justify-end gap-3">
+            <div className="p-5 border-t border-slate-200 bg-[#F8FAFC] flex justify-between items-center">
               <button 
-                onClick={() => setSelectedNotification(null)}
-                className="px-6 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors"
+                onClick={() => handleDownloadWord(selectedNotification)}
+                className="sm:hidden flex items-center gap-2 px-4 py-2.5 bg-blue-50 text-blue-600 font-bold rounded-lg hover:bg-blue-100 transition-colors"
               >
-                Yopish
+                <Download className="w-4 h-4" /> Word
               </button>
-              {selectedNotification.status === 'new' && (
+              <div className="flex gap-3 ml-auto">
                 <button 
-                  onClick={handleApprove}
-                  className="px-8 py-2.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-600/20 flex items-center gap-2"
+                  onClick={() => setSelectedNotification(null)}
+                  className="px-6 py-2.5 bg-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-300 transition-colors"
                 >
-                  <CheckCircle className="w-4 h-4" /> Saqlash va Yopish
+                  Yopish
                 </button>
-              )}
+                {selectedNotification.status === 'new' && (
+                  <button 
+                    onClick={handleApprove}
+                    className="px-8 py-2.5 bg-emerald-600 text-white font-medium rounded-lg hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-600/20 flex items-center gap-2"
+                  >
+                    <CheckCircle className="w-4 h-4" /> Saqlash
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -207,7 +336,7 @@ export default function NotificationsPage() {
           <Link href="/admin/declarations" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileText className="w-5 h-5" /> Deklaratsiyalar
           </Link>
-          <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 rounded-lg font-medium transition-colors flex-justify-between">
+          <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 rounded-lg font-bold transition-colors flex-justify-between">
             <div className="flex items-center gap-3">
               <ShieldAlert className="w-5 h-5" /> Xabarnomalar
             </div>
@@ -226,10 +355,7 @@ export default function NotificationsPage() {
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">
-          <Link href="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors mb-2">
-            <Settings className="w-5 h-5" /> Sozlamalar
-          </Link>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+          <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
             <LogOut className="w-5 h-5" /> Chiqish
           </button>
         </div>
@@ -244,8 +370,8 @@ export default function NotificationsPage() {
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 text-sm text-slate-600">
               <div className="text-right">
-                <p className="font-semibold text-slate-900">Rustamov Otabek</p>
-                <p className="text-xs text-slate-500">BKR Bosh mutaxassis</p>
+                <p className="font-semibold text-slate-900">{adminName}</p>
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{adminRole}</p>
               </div>
               <div className="w-9 h-9 rounded-full bg-slate-200 border border-slate-300 flex items-center justify-center">
                 <User className="w-5 h-5 text-slate-500" />
@@ -262,7 +388,7 @@ export default function NotificationsPage() {
                <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
               <div>
                 <p className="text-sm font-medium text-slate-500 mb-1">Yangi (Ko'rib chiqilmagan)</p>
-                <h3 className="text-2xl font-bold text-amber-600">{notifications.filter(n => n.status === 'new').length}</h3>
+                <h3 className="text-3xl font-black text-amber-600">{notifications.filter(n => n.status === 'new').length}</h3>
               </div>
               <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-lg flex items-center justify-center">
                 <Clock className="w-6 h-6" />
@@ -272,7 +398,7 @@ export default function NotificationsPage() {
                <div className="absolute top-0 left-0 w-1 h-full bg-emerald-500"></div>
               <div>
                 <p className="text-sm font-medium text-slate-500 mb-1">Tartibga solingan</p>
-                <h3 className="text-2xl font-bold text-emerald-600">{notifications.filter(n => n.status === 'reviewed').length}</h3>
+                <h3 className="text-3xl font-black text-emerald-600">{notifications.filter(n => n.status === 'reviewed').length}</h3>
               </div>
               <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-lg flex items-center justify-center">
                 <CheckCircle className="w-6 h-6" />
@@ -281,7 +407,7 @@ export default function NotificationsPage() {
             <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-slate-500 mb-1">Jami xabarnomalar</p>
-                <h3 className="text-2xl font-bold text-slate-800">{notifications.length}</h3>
+                <h3 className="text-3xl font-black text-slate-800">{notifications.length}</h3>
               </div>
               <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center">
                 <MessageSquareWarning className="w-6 h-6" />
@@ -307,22 +433,22 @@ export default function NotificationsPage() {
               <div className="flex gap-2 bg-slate-100 p-1 rounded-lg">
                 <button 
                   onClick={() => setStatusFilter("all")}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${statusFilter === 'all' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >Barchasi</button>
                 <button 
                   onClick={() => setStatusFilter("new")}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === 'new' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${statusFilter === 'new' ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >Yangilar</button>
                 <button 
                   onClick={() => setStatusFilter("reviewed")}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${statusFilter === 'reviewed' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  className={`px-4 py-1.5 rounded-md text-sm font-bold transition-colors ${statusFilter === 'reviewed' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >Ko'rib chiqilgan</button>
               </div>
             </div>
 
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 whitespace-nowrap">ID</th>
                     <th className="px-6 py-4 whitespace-nowrap">Xodim F.I.Sh</th>
@@ -333,12 +459,14 @@ export default function NotificationsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
-                  {filteredData.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="px-6 py-4 font-medium text-slate-900">#{item.id}</td>
-                      <td className="px-6 py-4 font-bold text-[#0A2540]">{item.name}</td>
-                      <td className="px-6 py-4 text-slate-700">{item.region}</td>
-                      <td className="px-6 py-4 text-slate-600">{item.date}</td>
+                  {isLoading ? (
+                    <tr><td colSpan={6} className="p-8 text-center font-bold text-slate-400">Yuklanmoqda...</td></tr>
+                  ) : filteredData.length > 0 ? filteredData.map((item, idx) => (
+                    <tr key={item._id || idx} className="hover:bg-slate-50 transition-colors">
+                      <td className="px-6 py-4 font-medium text-slate-900">#{idx + 1}</td>
+                      <td className="px-6 py-4 font-bold text-[#0A2540]">{item.fullName || item.name}</td>
+                      <td className="px-6 py-4 font-medium text-slate-700">{item.branch || item.region}</td>
+                      <td className="px-6 py-4 font-bold text-slate-600">{new Date(item.createdAt || item.date).toLocaleDateString('uz-UZ')}</td>
                       <td className="px-6 py-4">
                         {item.status === 'new' ? (
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-100 text-amber-700 border border-amber-200">
@@ -353,13 +481,15 @@ export default function NotificationsPage() {
                       <td className="px-6 py-4 text-right">
                         <button 
                           onClick={() => openModal(item)}
-                          className="px-4 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors inline-flex items-center gap-2 text-xs font-bold"
+                          className="px-4 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg transition-colors inline-flex items-center gap-2 text-xs font-bold border border-blue-200"
                         >
                           {item.status === 'new' ? "Ko'rib chiqish" : "Tafsilotlar"}
                         </button>
                       </td>
                     </tr>
-                  ))}
+                  )) : (
+                    <tr><td colSpan={6} className="p-12 text-center font-bold text-slate-400">Ma'lumot topilmadi.</td></tr>
+                  )}
                 </tbody>
               </table>
             </div>

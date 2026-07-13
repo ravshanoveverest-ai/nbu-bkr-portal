@@ -1,40 +1,150 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, ImageRun } from 'docx';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+const ImageModule = require('docxtemplater-image-module-free');
 import { saveAs } from 'file-saver';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
-  LogOut, User, Activity, Download, FileBarChart, Briefcase, Network, Landmark, CheckCircle
+  LogOut, User, Download, FileBarChart, Briefcase, Network, Landmark
 } from 'lucide-react';
 
-// Hisobot muddatlari uchun Data
-const reportDataStore = {
-  'I yarim yillik': {
-    total: 6525, submitted: 6287, excused: 238,
-    relatives: 385, subordination: 4, shares: 42, relativeShares: 158
-  },
-  'II yarim yillik': {
-    total: 6600, submitted: 6410, excused: 190,
-    relatives: 390, subordination: 2, shares: 45, relativeShares: 162
-  },
-  'Yillik': {
-    total: 6600, submitted: 6450, excused: 150,
-    relatives: 410, subordination: 6, shares: 50, relativeShares: 175
+// Rasmlarni Word'ga joylash uchun yordamchi funksiya
+function base64DataURLToArrayBuffer(dataURL: string) {
+  const base64Regex = /^data:image\/(png|jpg|jpeg|svg|svg\+xml);base64,/;
+  if (!base64Regex.test(dataURL)) return false;
+  const stringBase64 = dataURL.replace(base64Regex, "");
+  let binaryString;
+  if (typeof window !== "undefined") {
+    binaryString = window.atob(stringBase64);
+  } else {
+    binaryString = Buffer.from(stringBase64, "base64").toString("binary");
   }
-};
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
 export default function ReportsPage() {
   const router = useRouter();
-  const [period, setPeriod] = useState<'I yarim yillik' | 'II yarim yillik' | 'Yillik'>('I yarim yillik');
-  const [isDownloading, setIsDownloading] = useState(false);
   
-  const currentData = reportDataStore[period];
-  const submittedPercent = Math.round((currentData.submitted / currentData.total) * 100);
+  // TIZIM MA'LUMOTLARI
+  const [users, setUsers] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [declarations, setDeclarations] = useState<any[]>([]);
+  
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // --- SVG NI PNG GA O'GIRISH ---
+  const adminName = "Hasan Turaevich";
+  const adminRole = "BKR Boshlig'i";
+
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
+
+  const fetchInitialData = async () => {
+    setIsLoading(true);
+    try {
+      const [resUsers, resCamps, resDecls] = await Promise.all([
+        fetch('https://nbu-bkr-api.onrender.com/api/auth/users').catch(() => ({ ok: false, json: () => [] })),
+        fetch('https://nbu-bkr-api.onrender.com/api/campaigns').catch(() => ({ ok: false, json: () => [] })),
+        fetch('https://nbu-bkr-api.onrender.com/api/declarations').catch(() => ({ ok: false, json: () => [] }))
+      ]);
+
+      const fetchedUsers = resUsers.ok ? await (resUsers as Response).json() : [];
+      const fetchedCamps = resCamps.ok ? await (resCamps as Response).json() : [];
+      const fetchedDecls = resDecls.ok ? await (resDecls as Response).json() : [];
+
+      setUsers(fetchedUsers);
+      setCampaigns(fetchedCamps);
+      setDeclarations(fetchedDecls);
+
+      if (fetchedCamps.length > 0) {
+        const activeCamp = fetchedCamps.find((c: any) => c.status === 'active');
+        setSelectedCampaignId(activeCamp ? activeCamp._id : fetchedCamps[0]._id);
+      }
+    } catch (error) {
+      console.error("Xatolik:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // --- LOGIKA VA HISOBLASH (QOG'OZDAGI ALGORITM) ---
+  const currentData = useMemo(() => {
+    let stats = {
+      total: users.length > 0 ? users.length : 6525, // Agar userlar topilmasa default
+      submitted: 0,
+      excused: 0,
+      relatives: 0,
+      subordination: 0,
+      shares: 0,
+      relativeShares: 0
+    };
+
+    if (!selectedCampaignId) return stats;
+
+    const filteredDecls = declarations.filter(d => d.campaignId === selectedCampaignId);
+    stats.submitted = filteredDecls.length;
+    stats.excused = Math.max(stats.total - stats.submitted, 0);
+
+    filteredDecls.forEach(decl => {
+      let hasRelatives = false;
+      let hasSubordination = false;
+      let hasShares = false;
+      let hasRelativeShares = false;
+
+      // 1. Qarindoshlar va Bo'ysunishni tekshirish
+      if (decl.relatives && decl.relatives.some((r: any) => r.worksAtNBU)) {
+        hasRelatives = true;
+        
+        // BO'YSUNISH ALGORITMI
+        const pBranch = (decl.personalInfo?.branch || "").toLowerCase();
+        const pPos = (decl.personalInfo?.position || "").toLowerCase();
+        
+        const isSubordinate = decl.relatives.some((r: any) => {
+          if (!r.worksAtNBU) return false;
+          const rBranch = (r.nbuBranch || "").toLowerCase();
+          const rPos = (r.nbuPosition || "").toLowerCase();
+          
+          // Agar bir xil filialda bo'lsa
+          const isSameBranch = pBranch === rBranch && pBranch !== "";
+          
+          // Boshqaruvchi maqomini bildiruvchi kalit so'zlar
+          const bossKeywords = ['bosh', 'mudir', 'rahbar', 'boshqaruvchi'];
+          const isBoss = bossKeywords.some(keyword => pPos.includes(keyword) || rPos.includes(keyword));
+          
+          return isSameBranch && isBoss;
+        });
+
+        if (isSubordinate) hasSubordination = true;
+      }
+
+      // 2. Tijorat manfaatlari
+      if (decl.myCompanies && decl.myCompanies.length > 0) hasShares = true;
+      if (decl.relativeCompanies && decl.relativeCompanies.length > 0) hasRelativeShares = true;
+
+      // Natijalarni qo'shish
+      if (hasRelatives) stats.relatives++;
+      if (hasSubordination) stats.subordination++;
+      if (hasShares) stats.shares++;
+      if (hasRelativeShares) stats.relativeShares++;
+    });
+
+    return stats;
+  }, [declarations, users, selectedCampaignId]);
+
+  const submittedPercent = currentData.total > 0 ? Math.round((currentData.submitted / currentData.total) * 100) : 0;
+
+  // --- SVG NI PNG GA O'GIRISH (Word uchun) ---
   const svgToPngBase64 = (svgString: string, width: number, height: number): Promise<string> => {
     return new Promise((resolve, reject) => {
       const img = new window.Image();
@@ -51,7 +161,7 @@ export default function ReportsPage() {
           ctx.fillRect(0, 0, canvas.width, canvas.height);
           ctx.scale(2, 2);
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/png').split(',')[1]);
+          resolve('data:image/png;base64,' + canvas.toDataURL('image/png').split(',')[1]);
         } else {
           reject("Canvas yaratishda xatolik");
         }
@@ -62,19 +172,11 @@ export default function ReportsPage() {
     });
   };
 
-  const base64ToUint8Array = (base64: string) => {
-    const binaryString = window.atob(base64);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-    return bytes;
-  };
-
   // --- HAQIQIY WORD (.DOCX) GENERATORI ---
   const downloadReport = async () => {
     setIsDownloading(true);
     try {
+      // 1. Grafiklar uchun SVG larni chizib olish
       const r = 70;
       const c = 2 * Math.PI * r;
       const dash = (submittedPercent / 100) * c;
@@ -87,7 +189,7 @@ export default function ReportsPage() {
           <text x="60" y="71" font-family="Times New Roman" font-size="14">Deklaratsiya topshirgan xodimlar</text>
           
           <rect x="40" y="85" width="12" height="12" fill="#C0504D" />
-          <text x="60" y="96" font-family="Times New Roman" font-size="14">Bola parvarishi ta'tili, o'qish va boshqa uzrli sabablarga ko'ra topshirmaganlar</text>
+          <text x="60" y="96" font-family="Times New Roman" font-size="14">Dekret/Ta'til va boshqa uzrli sabablar</text>
 
           <g transform="translate(300, 190) rotate(-90)">
             <circle r="${r}" cx="0" cy="0" fill="transparent" stroke="#C0504D" stroke-width="35" />
@@ -97,35 +199,27 @@ export default function ReportsPage() {
         </svg>
       `;
 
-      const maxVal = Math.max(currentData.relatives, currentData.subordination, currentData.shares, currentData.relativeShares);
+      const maxVal = Math.max(currentData.relatives, currentData.subordination, currentData.shares, currentData.relativeShares, 1);
       const barSvg = `
         <svg width="700" height="250" xmlns="http://www.w3.org/2000/svg">
           <rect width="100%" height="100%" fill="#ffffff" />
-          
           <line x1="280" y1="20" x2="280" y2="220" stroke="#d1d5db" stroke-width="2" />
-          <line x1="380" y1="20" x2="380" y2="220" stroke="#e5e7eb" stroke-width="1" />
-          <line x1="480" y1="20" x2="480" y2="220" stroke="#e5e7eb" stroke-width="1" />
-          <line x1="580" y1="20" x2="580" y2="220" stroke="#e5e7eb" stroke-width="1" />
-          <line x1="680" y1="20" x2="680" y2="220" stroke="#e5e7eb" stroke-width="1" />
-
+          
           <g font-family="Times New Roman" font-size="14" fill="#000000">
-            <text x="270" y="45" text-anchor="end">Yaqin qarindoshlari</text>
-            <text x="270" y="60" text-anchor="end">mavjudligi</text>
+            <text x="270" y="45" text-anchor="end">Yaqin qarindoshlari mavjudligi</text>
             <rect x="280" y="35" width="${Math.max((currentData.relatives/maxVal)*400, 5)}" height="30" fill="#4472C4" />
             <text x="${280 + Math.max((currentData.relatives/maxVal)*400, 5) + 10}" y="55" fill="#000" font-weight="bold">${currentData.relatives}</text>
 
             <text x="270" y="95" text-anchor="end">Bo'ysunuv munosabatlari</text>
-            <rect x="280" y="85" width="${Math.max((currentData.subordination/maxVal)*400, 5)}" height="30" fill="#4472C4" />
+            <rect x="280" y="85" width="${Math.max((currentData.subordination/maxVal)*400, 5)}" height="30" fill="#C0504D" />
             <text x="${280 + Math.max((currentData.subordination/maxVal)*400, 5) + 10}" y="105" fill="#000" font-weight="bold">${currentData.subordination}</text>
 
-            <text x="270" y="145" text-anchor="end">Yuridik shaxslarda ulushga</text>
-            <text x="270" y="160" text-anchor="end">egaligi</text>
-            <rect x="280" y="135" width="${Math.max((currentData.shares/maxVal)*400, 5)}" height="30" fill="#4472C4" />
+            <text x="270" y="145" text-anchor="end">Yuridik shaxslarda ulushga egaligi</text>
+            <rect x="280" y="135" width="${Math.max((currentData.shares/maxVal)*400, 5)}" height="30" fill="#EAB308" />
             <text x="${280 + Math.max((currentData.shares/maxVal)*400, 5) + 10}" y="155" fill="#000" font-weight="bold">${currentData.shares}</text>
 
-            <text x="270" y="195" text-anchor="end">Tadbirkorlik subyektlarida</text>
-            <text x="270" y="210" text-anchor="end">ishtirok etishi</text>
-            <rect x="280" y="185" width="${Math.max((currentData.relativeShares/maxVal)*400, 5)}" height="30" fill="#4472C4" />
+            <text x="270" y="195" text-anchor="end">Tadbirkorlik subyektlarida ishtiroki</text>
+            <rect x="280" y="185" width="${Math.max((currentData.relativeShares/maxVal)*400, 5)}" height="30" fill="#10B981" />
             <text x="${280 + Math.max((currentData.relativeShares/maxVal)*400, 5) + 10}" y="205" fill="#000" font-weight="bold">${currentData.relativeShares}</text>
           </g>
         </svg>
@@ -134,156 +228,74 @@ export default function ReportsPage() {
       const pieImgData = await svgToPngBase64(pieSvg, 600, 280);
       const barImgData = await svgToPngBase64(barSvg, 700, 250);
 
-      const pieUint8 = base64ToUint8Array(pieImgData);
-      const barUint8 = base64ToUint8Array(barImgData);
+      // 2. Shablonni yuklash va to'ldirish
+      const response = await fetch('/report_template.docx');
+      if (!response.ok) {
+        alert("report_template.docx fayli public papkada topilmadi!");
+        return;
+      }
+      const content = await response.arrayBuffer();
+      const zip = new PizZip(content);
 
-      const p = (text: string, bold = false, align: any = "both", indent = 708) => new Paragraph({
-        alignment: align,
-        spacing: { line: 360, before: 60, after: 60 },
-        indent: { firstLine: indent },
-        children: [new TextRun({ text, bold, font: "Times New Roman", size: 26 })]
+      const imageOptions = {
+        centered: true,
+        getImage: function(tagValue: any) {
+          return base64DataURLToArrayBuffer(tagValue);
+        },
+        getSize: function(img: any, tagValue: any, tagName: string) {
+          if (tagName === 'pieChart') return [450, 210];
+          if (tagName === 'barChart') return [550, 196];
+          return [150, 150];
+        }
+      };
+      const imageModule = new ImageModule(imageOptions);
+
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        modules: [imageModule]
       });
 
-      const bullet = (text: string) => new Paragraph({
-        alignment: "both",
-        spacing: { line: 360 },
-        indent: { left: 708, hanging: 354 },
-        children: [new TextRun({ text: "· " + text, font: "Times New Roman", size: 26 })]
+      const activeCampaign = campaigns.find(c => c._id === selectedCampaignId);
+      const periodName = activeCampaign ? activeCampaign.title : 'Noma\'lum davr';
+
+      doc.render({
+        period: periodName,
+        total: currentData.total,
+        submitted: currentData.submitted,
+        excused: currentData.excused,
+        relatives: currentData.relatives,
+        subordination: currentData.subordination,
+        shares: currentData.shares,
+        relativeShares: currentData.relativeShares,
+        pieChart: pieImgData,
+        barChart: barImgData
       });
 
-      const tblBorder = { style: "single" as any, size: 1, color: "000000" };
-      const noBorder = { style: "none" as any, size: 0, color: "FFFFFF" };
-
-      const doc = new Document({
-        sections: [{
-          properties: {},
-          children: [
-            p(`“O'zmilliybank” AJda 2026 yilning ${period} yakunlari bo'yicha`, true, "center", 0),
-            p(`manfaatlar to'qnashuvini boshqarish holati hamda ushbu yo'nalishda`, true, "center", 0),
-            p(`amalga oshirilgan ishlar natijalari to'g'risida`, true, "center", 0),
-            p(`HISOBOT`, true, "center", 0),
-            
-            new Paragraph({ spacing: { before: 200 } }),
-
-            p(`I. Umumiy ma'lumot`, true, "center", 0),
-            p(`Hisobot davrida “O'zmilliybank” AJda manfaatlar to'qnashuvini aniqlash, oldini olish va tartibga solish sohasidagi ishlar O'zbekiston Respublikasining “Manfaatlar to'qnashuvi to'g'risida”gi Qonuni, korrupsiyaga qarshi kurashish sohasidagi boshqa normativ-huquqiy hujjatlar hamda Bankning ichki qoidalari talablariga muvofiq tizimli ravishda amalga oshirildi.`),
-            p(`Asosiy e'tibor manfaatlar to'qnashuvini keltirib chiqarishi mumkin bo'lgan xavf va omillarni barvaqt aniqlash, ularning oldini olish va bartaraf etish, manfaatlar to'qnashuvini deklaratsiyalash tizimini takomillashtirish, xodimlar tomonidan qonunchilik hamda ichki normativ hujjatlar talablariga rioya etish madaniyatini yuksaltirish, shuningdek mazkur yo'nalishdagi ichki nazorat mexanizmlarining samaradorligini oshirishga qaratildi.`),
-
-            p(`II. Normativ-huquqiy bazani takomillashtirish`, true, "center", 0),
-            p(`“Manfaatlar to'qnashuvi to'g'risida”gi Qonun talablarini Bank faoliyatiga to'liq implementatsiya qilish maqsadida Bankning manfaatlar to'qnashuvini boshqarish va korrupsiyaga qarshi kurashish sohasidagi ichki normativ hujjatlari kompleks ravishda qayta ko'rib chiqildi hamda qonunchilik talablariga muvofiqlashtirildi.`),
-            p(`Jumladan:`),
-            p(`- “Manfaatlar to'qnashuvi bilan bog'liq munosabatlarni tartibga solish siyosati” (2026 yil 30 iyun, 163v/35-son);`, false, "both", 0),
-            p(`- “Korrupsiyaga qarshi kurashish siyosati” (2026 yil 30 iyun, 162v/35-son) yangi tahrirda tasdiqlandi.`, false, "both", 0),
-            p(`Mazkur chora-tadbirlar natijasida Bankda manfaatlar to'qnashuvini aniqlash, oldini olish, oshkor etish va tartibga solishga qaratilgan yagona huquqiy va tashkiliy mexanizm shakllantirilib, uning amaliyotda samarali qo'llanilishi ta'minlandi.`),
-
-            p(`III. Deklaratsiyalash natijalari va xavflar tahlili`, true, "center", 0),
-            p(`Hisobot davrida manfaatlar to'qnashuvi to'g'risidagi deklaratsiyalarni to'ldirish bo'yicha keng ko'lamli ishlar amalga oshirildi, jumladan:`),
-            
-            new Table({
-              width: { size: 100, type: "pct" as any },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: "Ko'rsatkich", bold: true, font: "Times New Roman", size: 26 })], alignment: "center" as any })] }),
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: "Soni", bold: true, font: "Times New Roman", size: 26 })], alignment: "center" as any })] }),
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: "Jami shtat birliklari", font: "Times New Roman", size: 26 })] })] }),
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: currentData.total.toString(), font: "Times New Roman", size: 26 })], alignment: "center" as any })] }),
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: "Deklaratsiya topshirgan xodimlar", font: "Times New Roman", size: 26 })] })] }),
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: currentData.submitted.toString(), font: "Times New Roman", size: 26 })], alignment: "center" as any })] }),
-                  ]
-                }),
-                new TableRow({
-                  children: [
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: "Bola parvarishi ta'tili, o'qish va boshqa uzrli sabablarga ko'ra topshirmaganlar", font: "Times New Roman", size: 26 })] })] }),
-                    new TableCell({ borders: { top: tblBorder, bottom: tblBorder, left: tblBorder, right: tblBorder }, margins: { top: 100, bottom: 100, left: 100, right: 100 }, children: [new Paragraph({ children: [new TextRun({ text: currentData.excused.toString(), font: "Times New Roman", size: 26 })], alignment: "center" as any })] }),
-                  ]
-                })
-              ]
-            }),
-
-            new Paragraph({ spacing: { before: 300 } }),
-
-            // PIE CHART RASMI (TS XATOLIGI BO'LMASLIGI UCHUN AS ANY)
-            new Paragraph({
-              alignment: "center" as any,
-              children: [new ImageRun({ data: pieUint8, type: "png", transformation: { width: 450, height: 210 } } as any)]
-            }),
-
-            new Paragraph({ spacing: { before: 300 } }),
-
-            p(`Manfaatlar to'qnashuvi to'g'risidagi deklaratsiyalar tahlili natijalariga ko'ra quyidagi holatlar aniqlandi:`, false, "both", 708),
-
-            new Paragraph({ spacing: { before: 200 } }),
-
-            // BAR CHART RASMI (TS XATOLIGI BO'LMASLIGI UCHUN AS ANY)
-            new Paragraph({
-              alignment: "center" as any,
-              children: [new ImageRun({ data: barUint8, type: "png", transformation: { width: 550, height: 196 } } as any)]
-            }),
-
-            new Paragraph({ spacing: { before: 200 } }),
-
-            bullet(`${currentData.relatives} nafar xodimning Bank tizimida mehnat faoliyatini amalga oshirayotgan yaqin qarindoshlari mavjudligi;`),
-            bullet(`mazkur holatlarni o'rganish natijasida ${currentData.subordination} ta holatda xodimlar o'rtasida bevosita bo'ysunuv munosabatlari mavjudligi aniqlanib, ular mavjud manfaatlar to'qnashuvi sifatida baholandi hamda Odob-axloq komissiyasining qarori asosida belgilangan tartibda bartaraf etildi;`),
-            bullet(`${currentData.shares} nafar xodimning yuridik shaxslar ustav fondida ulush yoki aksiyalarga egaligi yoxud ularning boshqaruv organlari tarkibida ishtirok etishi mavjudligi;`),
-            bullet(`${currentData.relativeShares} nafar xodimning yaqin qarindoshlari tadbirkorlik subyektlarining ustav kapitalida ishtirok etishi yoki ularning boshqaruv organlari tarkibiga kirishi aniqlandi.`),
-
-            new Paragraph({ spacing: { before: 200 } }),
-
-            p(`IV. Profilaktik chora-tadbirlar`, true, "center", 0),
-            p(`Hisobot davrida manfaatlar to'qnashuvining oldini olish va uning yuzaga kelish ehtimolini kamaytirishga qaratilgan quyidagi profilaktik chora-tadbirlar amalga oshirildi:`),
-            bullet(`ishga qabul qilinayotgan nomzodlar tomonidan manfaatlar to'qnashuvi to'g'risidagi deklaratsiyalarni to'ldirish va ularda keltirilgan ma'lumotlarni belgilangan tartibda ko'rib chiqish;`),
-            bullet(`xodimlarni lavozimga tayinlash, boshqa lavozimga o'tkazish hamda rotatsiya qilish jarayonlarida manfaatlar to'qnashuvi mavjudligi yoki yuzaga kelishi ehtimolini baholash;`),
-            bullet(`Bankning barcha xodimlarini korrupsiyaga qarshi kurashish va manfaatlar to'qnashuvini boshqarish sohasidagi ichki normativ hujjatlar mazmun-mohiyati bilan tanishtirish hamda ular tomonidan mazkur talablarga rioya etilishini ta'minlash.`),
-
-            p(`V. O'quv va monitoring ishlari`, true, "center", 0),
-            p(`Hisobot davrida Korrupsiyani oldini olish boshqarmasi tomonidan manfaatlar to'qnashuvining oldini olish hamda korrupsiyaga qarshi kurashish sohasida xodimlarning huquqiy ongi va huquqiy madaniyatini yuksaltirishga qaratilgan keng qamrovli tushuntirish va profilaktik tadbirlar amalga oshirildi.`),
-            p(`Xususan, SAP ta'lim platformasi orqali: “Korrupsiyaga qarshi kurashish davlat siyosati”; “Manfaatlar to'qnashuvi to'g'risida”gi Qonun; “Korrupsiya uchun javobgarlik” mavzulari bo'yicha masofaviy o'quv mashg'ulotlari tashkil etildi hamda ularga jami 4 630 nafar xodim jalb qilindi.`),
-
-            p(`VI. Aniqlangan qoidabuzarliklar va ularga nisbatan qo'llanilgan choralar`, true, "center", 0),
-            p(`Hisobot davrida manfaatlar to'qnashuvi bilan bog'liq 3 ta holat aniqlanib, ularning har biri yuzasidan belgilangan tartibda xizmat tekshiruvlari o'tkazildi. O'tkazilgan tekshiruvlar natijasida qoidabuzarliklar yuzasidan Odob-axloq komissiyasining qarorlariga asosan tegishli intizomiy jazo va boshqa ta'sir choralari qo'llanildi.`),
-
-            p(`VII. Tahliliy xulosa`, true, "center", 0),
-            p(`Hisobot davrida amalga oshirilgan ishlar natijalari Bankda manfaatlar to'qnashuvini boshqarish tizimi izchil takomillashtirilayotganini ko'rsatdi. Deklaratsiyalash tizimining joriy etilishi manfaatlar to'qnashuvini barvaqt aniqlash, baholash va oldini olish imkoniyatlarini kengaytirdi.`),
-            p(`Kelgusida deklaratsiyalash jarayonlarini raqamlashtirish, avtomatlashtirilgan monitoring va nazorat tizimlarini joriy etish hamda korrupsiyaviy xavflarni erta aniqlash mexanizmlarini takomillashtirish ustuvor vazifalardan biri hisoblanadi.`),
-
-            new Paragraph({ spacing: { before: 800 } }),
-
-            // Imzo qismi
-            new Table({
-              width: { size: 100, type: "pct" as any },
-              borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder, insideHorizontal: noBorder, insideVertical: noBorder },
-              rows: [
-                new TableRow({
-                  children: [
-                    new TableCell({ borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder }, children: [new Paragraph({ children: [new TextRun({ text: "Korrupsiyani oldini olish boshqarmasi", bold: true, font: "Times New Roman", size: 26 })] }), new Paragraph({ children: [new TextRun({ text: "Boshqarma boshlig'i v.b.", bold: true, font: "Times New Roman", size: 26 })] })] }),
-                    new TableCell({ borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder }, children: [new Paragraph({ children: [new TextRun({ text: "X. Usmanov", bold: true, font: "Times New Roman", size: 26 })], alignment: "right" as any })], verticalAlign: "bottom" as any }),
-                  ]
-                })
-              ]
-            })
-          ]
-        }]
+      const out = doc.getZip().generate({
+        type: "blob",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
       });
-
-      const buffer = await Packer.toBlob(doc);
-      saveAs(buffer, `BKR_Hisobot_${period.replace(/\s+/g, '_')}.docx`);
+      saveAs(out, `BKR_Hisobot_${periodName.replace(/\s+/g, '_')}.docx`);
 
     } catch (error) {
       console.error("Xatolik:", error);
-      alert("Hisobotni yuklashda xatolik yuz berdi. Kutubxonalar o'rnatilganiga ishonch hosil qiling.");
+      alert("Hisobotni yuklashda xatolik yuz berdi.");
     } finally {
       setIsDownloading(false);
     }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-bold text-slate-500">Hisobotlar tahlil qilinmoqda...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] flex font-sans overflow-hidden">
@@ -315,24 +327,22 @@ export default function ReportsPage() {
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">
-        
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+          <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
             <LogOut className="w-5 h-5" /> Chiqish
           </button>
         </div>
       </aside>
 
       {/* MAIN CONTENT */}
-      <main className="flex-1 ml-0 md:ml-63 flex flex-col h-screen overflow-y-auto">
-        <header className="min-h-[64px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 shadow-sm">
+      <main className="flex-1 ml-0 md:ml-64 flex flex-col h-screen overflow-y-auto">
+        <header className="min-h-[64px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10 shadow-sm">
           <div className="flex items-center gap-3">
-            {/* <FileBarChart className="w-5 h-5 text-blue-600" /> */}
             <h1 className="text-xl font-bold text-slate-800">Tahliliy Hisobotlar</h1>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <div className="text-right">
-              <p className="font-bold text-slate-900">Hasan Turaevich</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">BKR Bosh mutaxassis</p>
+              <p className="font-bold text-slate-900">{adminName}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">{adminRole}</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center border border-slate-300">
               <User className="w-5 h-5 text-slate-500" />
@@ -346,23 +356,25 @@ export default function ReportsPage() {
               <div className="bg-blue-50 p-2.5 rounded-lg text-blue-600">
                 <Calendar className="w-5 h-5" />
               </div>
-              <div className="flex-1 sm:w-64">
+              <div className="flex-1 sm:w-72">
                 <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">Hisobot davrini tanlang</label>
                 <select 
-                  value={period}
-                  onChange={(e) => setPeriod(e.target.value as any)}
+                  value={selectedCampaignId}
+                  onChange={(e) => setSelectedCampaignId(e.target.value)}
                   className="w-full text-slate-800 font-bold bg-transparent outline-none border-b-2 border-slate-200 pb-1 focus:border-blue-600 cursor-pointer transition-colors"
                 >
-                  <option value="I yarim yillik">I yarim yillik (2026)</option>
-                  <option value="II yarim yillik">II yarim yillik (2026)</option>
-                  <option value="Yillik">Yillik (2026)</option>
+                  {campaigns.length > 0 ? campaigns.map(c => (
+                    <option key={c._id} value={c._id}>{c.title}</option>
+                  )) : (
+                    <option value="">Muddatlar mavjud emas</option>
+                  )}
                 </select>
               </div>
             </div>
 
             <button 
               onClick={downloadReport}
-              disabled={isDownloading}
+              disabled={isDownloading || !selectedCampaignId}
               className="w-full sm:w-auto px-6 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-all shadow-md shadow-blue-600/20 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isDownloading ? 'Hujjat tayyorlanmoqda...' : <><Download className="w-5 h-5" /> Hisobotni yuklash</>}
@@ -404,7 +416,7 @@ export default function ReportsPage() {
                 <div className="flex justify-between items-center bg-red-50 p-3.5 rounded-xl border border-red-100">
                   <div className="flex items-center gap-2.5">
                     <div className="w-3.5 h-3.5 rounded-full bg-red-500 shadow-sm"></div>
-                    <span className="text-sm font-semibold text-red-900">Uzrli sabab (Dekret/Ta'til)</span>
+                    <span className="text-sm font-semibold text-red-900">Dekret/Ta'til va boshqa sabablar</span>
                   </div>
                   <span className="font-black text-red-700 text-base">{currentData.excused}</span>
                 </div>

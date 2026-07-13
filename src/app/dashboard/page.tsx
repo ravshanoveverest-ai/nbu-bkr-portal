@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   FileText, ShieldAlert, LogOut, User, ChevronRight,
@@ -15,33 +15,119 @@ export default function DashboardPage() {
   const [showTypeModal, setShowTypeModal] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   
-  // ADMIN TOMONIDAN BOSHQARILADIGAN HOLATLAR (Demo uchun statik)
-  const isAnnualLocked = true; // Yillik deklaratsiya hozircha yopiq
-  const hasSavedData = false; // Xodim avval deklaratsiya saqlaganmi yo'qmi? (Hozircha yo'q deb turamiz)
+  // DINAMIK HOLATLAR
+  const [isAnnualLocked, setIsAnnualLocked] = useState(true); 
+  const [annualLockReason, setAnnualLockReason] = useState<'no_campaign' | 'already_submitted'>('no_campaign');
+  const [hasSavedData, setHasSavedData] = useState(false); 
 
   // PROFIL MA'LUMOTLARI
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [profileData, setProfileData] = useState({
-    fullName: "Valiyev Alisher Baxodirovich",
-    email: "a.valiyev@nbu.uz",
-    phone: "+998 90 123 45 67",
+    fullName: "Yuklanmoqda...",
+    email: "Yuklanmoqda...",
+    role: "user",
+    phone: "+998 90 000 00 00",
     region: "Bosh ofis",
-    position: "Kredit operatsiyalari bo'limi bosh mutaxassisi",
-    passport: "AA1234567",
-    pinfl: "31205931234567"
+    position: "Mutaxassis",
+    passport: "Kiritilmagan",
+    pinfl: "Kiritilmagan"
   });
 
+  useEffect(() => {
+    // 1. LocalStorage dan User ma'lumotlarini o'qib olish
+    const userInfoString = localStorage.getItem('user_info');
+    let currentUserEmail = '';
+
+    if (userInfoString) {
+      const parsedUser = JSON.parse(userInfoString);
+      currentUserEmail = parsedUser.email || '';
+      setProfileData(prev => ({
+        ...prev,
+        fullName: parsedUser.fullName || prev.fullName,
+        email: parsedUser.email || prev.email,
+        role: parsedUser.role || prev.role,
+        phone: parsedUser.phone || prev.phone,
+        passport: parsedUser.passport || prev.passport,
+        pinfl: parsedUser.pinfl || prev.pinfl,
+      }));
+    }
+
+    // 2. Yillik deklaratsiya holatini (ochiq/yopiq va topshirilganligini) tekshirish
+    const checkStatus = async () => {
+      try {
+        // Faol kampaniyalarni tortish
+        const resCamps = await fetch('https://nbu-bkr-api.onrender.com/api/campaigns');
+        const campaigns = resCamps.ok ? await resCamps.json() : [];
+        const activeCamp = campaigns.find((camp: any) => camp.status === 'active');
+
+        // Barcha deklaratsiyalarni tortish va xodimnikini ajratib olish
+        if (currentUserEmail) {
+          const resDecls = await fetch('https://nbu-bkr-api.onrender.com/api/declarations');
+          if (resDecls.ok) {
+            const allDecls = await resDecls.json();
+            const myDecls = allDecls.filter((d: any) => d.userEmail === currentUserEmail);
+            
+            // Xodimda umuman deklaratsiya bormi? (Profil uchun)
+            if (myDecls.length > 0) setHasSavedData(true);
+
+            // Faol muddat bor bo'lsa, xodim shu muddatga 'yillik' yuborganmi tekshiramiz
+            if (activeCamp) {
+              const hasSubmittedAnnual = myDecls.some((d: any) => 
+                d.type === 'yillik' && d.campaignId === activeCamp._id
+              );
+              
+              if (hasSubmittedAnnual) {
+                // Agar yuborgan bo'lsa qulflaymiz
+                setIsAnnualLocked(true);
+                setAnnualLockReason('already_submitted');
+              } else {
+                // Yubormagan bo'lsa ochiq turadi
+                setIsAnnualLocked(false);
+              }
+            } else {
+              // Faol kampaniya umuman yo'q
+              setIsAnnualLocked(true);
+              setAnnualLockReason('no_campaign');
+            }
+          }
+        }
+      } catch (error) {
+        console.error("Xatolik:", error);
+      }
+    };
+
+    checkStatus();
+  }, []);
+
   const handleLogout = () => {
-    // Tizimdan chiqish
+    localStorage.removeItem('bkr_token'); 
+    localStorage.removeItem('user_info');
     router.push('/login');
   };
 
-  const handleAutofill = () => {
-    if (hasSavedData) {
-      router.push('/declaration?autofill=true');
-    } else {
-      alert("Sizda oldin saqlangan deklaratsiya ma'lumotlari topilmadi. Iltimos, yangi to'ldiring.");
-    }
+  const handleSaveProfile = () => {
+    setIsEditingProfile(false);
+    localStorage.setItem('user_info', JSON.stringify({
+      fullName: profileData.fullName,
+      email: profileData.email,
+      role: profileData.role,
+      phone: profileData.phone,
+      passport: profileData.passport,
+      pinfl: profileData.pinfl
+    }));
+  };
+
+  const getInitials = (name: string) => {
+    if (!name || name === "Yuklanmoqda...") return "U";
+    const parts = name.split(' ');
+    if (parts.length > 1) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return name.slice(0, 2).toUpperCase();
+  };
+
+  const getShortName = (name: string) => {
+    if (!name || name === "Yuklanmoqda...") return "Foydalanuvchi";
+    const parts = name.split(' ');
+    return parts.length > 1 ? `${parts[1]} ${parts[0]}` : name;
   };
 
   return (
@@ -52,7 +138,6 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-[60] flex justify-center items-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full flex flex-col max-h-[90vh] animate-in zoom-in-95">
             
-            {/* Modal Header */}
             <div className="flex justify-between items-center p-6 border-b border-slate-100 bg-[#0A2540] rounded-t-2xl">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <User className="w-5 h-5 text-blue-400" /> Mening profilim
@@ -62,23 +147,23 @@ export default function DashboardPage() {
               </button>
             </div>
 
-            {/* Modal Body */}
             <div className="p-6 overflow-y-auto flex-1 bg-slate-50">
               
-              {/* Asosiy ma'lumotlar Card */}
               <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 mb-6">
                 <div className="flex justify-between items-start mb-6 border-b border-slate-100 pb-4">
                   <div className="flex items-center gap-4">
                     <div className="w-16 h-16 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-2xl font-bold border-2 border-white shadow-md">
-                      {profileData.fullName.charAt(0)}
+                      {getInitials(profileData.fullName)}
                     </div>
                     <div>
                       <h3 className="text-lg font-bold text-slate-800">{profileData.fullName}</h3>
-                      <p className="text-sm text-slate-500">{profileData.position} ({profileData.region})</p>
+                      <p className="text-sm text-slate-500">
+                        {profileData.role === 'admin' ? "Administrator" : profileData.position} ({profileData.region})
+                      </p>
                     </div>
                   </div>
                   <button 
-                    onClick={() => setIsEditingProfile(!isEditingProfile)} 
+                    onClick={isEditingProfile ? handleSaveProfile : () => setIsEditingProfile(true)} 
                     className={`px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors ${isEditingProfile ? 'bg-emerald-50 text-emerald-600' : 'bg-blue-50 text-blue-600'}`}
                   >
                     {isEditingProfile ? <><Save className="w-4 h-4"/> Saqlash</> : <><Edit3 className="w-4 h-4"/> Tahrirlash</>}
@@ -89,7 +174,7 @@ export default function DashboardPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Email manzil</label>
                     {isEditingProfile ? (
-                      <input type="email" value={profileData.email} onChange={e => setProfileData({...profileData, email: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-600" />
+                      <input type="email" disabled value={profileData.email} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none bg-slate-100 cursor-not-allowed text-slate-500" />
                     ) : <p className="text-sm font-semibold text-slate-800 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">{profileData.email}</p>}
                   </div>
                   <div>
@@ -101,19 +186,18 @@ export default function DashboardPage() {
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Pasport</label>
                     {isEditingProfile ? (
-                      <input type="text" value={profileData.passport} onChange={e => setProfileData({...profileData, passport: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-600 uppercase" />
+                      <input type="text" value={profileData.passport} onChange={e => setProfileData({...profileData, passport: e.target.value.toUpperCase()})} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-600 uppercase" />
                     ) : <p className="text-sm font-semibold text-slate-800 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">{profileData.passport}</p>}
                   </div>
                   <div>
                     <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">JSHSHIR</label>
                     {isEditingProfile ? (
-                      <input type="text" value={profileData.pinfl} onChange={e => setProfileData({...profileData, pinfl: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-600" />
+                      <input type="text" value={profileData.pinfl} onChange={e => setProfileData({...profileData, pinfl: e.target.value.replace(/\D/g, '')})} className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-600" />
                     ) : <p className="text-sm font-semibold text-slate-800 bg-slate-50 px-3 py-2 rounded-lg border border-slate-100">{profileData.pinfl}</p>}
                   </div>
                 </div>
               </div>
 
-              {/* Saqlangan deklaratsiya Card */}
               <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-xl border border-blue-100 shadow-sm">
                 <h3 className="text-sm font-bold text-indigo-900 uppercase tracking-wider mb-3 flex items-center gap-2">
                   <Database className="w-4 h-4" /> Mening Deklaratsiyam
@@ -155,21 +239,26 @@ export default function DashboardPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               
-              {/* 1. Yillik deklaratsiya (Qulflangan) */}
+              {/* 1. Yillik deklaratsiya (DINAMIK QULFLANGAN) */}
               <div 
                 className={`relative border-2 rounded-xl p-5 transition-all ${!isAnnualLocked ? 'border-blue-100 hover:border-blue-500 hover:shadow-md cursor-pointer bg-white group' : 'border-slate-200 bg-slate-50 opacity-80 cursor-not-allowed'}`}
                 onClick={() => !isAnnualLocked && router.push('/declaration?type=yillik')}
               >
                 {isAnnualLocked && (
-                  <div className="absolute -top-3 -right-2 bg-slate-700 text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1 font-bold shadow-md">
-                    <Lock className="w-3 h-3" /> Yopiq
+                  <div className={`absolute -top-3 -right-2 text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1 font-bold shadow-md ${annualLockReason === 'already_submitted' ? 'bg-emerald-500' : 'bg-slate-700'}`}>
+                    {annualLockReason === 'already_submitted' ? <CheckCircle className="w-3 h-3" /> : <Lock className="w-3 h-3" />} 
+                    {annualLockReason === 'already_submitted' ? 'Topshirilgan' : 'Yopiq'}
                   </div>
                 )}
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${!isAnnualLocked ? 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors' : 'bg-slate-200 text-slate-500'}`}>
-                  {isAnnualLocked ? <Lock className="w-5 h-5" /> : <CalendarDays className="w-6 h-6" />}
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${!isAnnualLocked ? 'bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors' : (annualLockReason === 'already_submitted' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-200 text-slate-500')}`}>
+                  {isAnnualLocked ? (annualLockReason === 'already_submitted' ? <CheckCircle className="w-6 h-6" /> : <Lock className="w-5 h-5" />) : <CalendarDays className="w-6 h-6" />}
                 </div>
                 <h3 className={`font-bold mb-2 ${!isAnnualLocked ? 'text-slate-800' : 'text-slate-600'}`}>Yillik deklaratsiya</h3>
-                <p className="text-[11px] text-slate-500 leading-relaxed">Har yili belgilangan muddatda barcha xodimlar tomonidan ommaviy to'ldiriladigan navbatdagi deklaratsiya.</p>
+                <p className="text-[11px] leading-relaxed text-slate-500">
+                  {isAnnualLocked && annualLockReason === 'already_submitted' 
+                    ? "Siz joriy muddat uchun yillik deklaratsiyani muvaffaqiyatli topshirgansiz. Yana to'ldirish talab etilmaydi." 
+                    : "Har yili belgilangan muddatda barcha xodimlar tomonidan ommaviy to'ldiriladigan navbatdagi deklaratsiya."}
+                </p>
               </div>
 
               {/* 2. Rotatsiya deklaratsiyasi (Doim ochiq) */}
@@ -205,7 +294,6 @@ export default function DashboardPage() {
       <header className="bg-[#0A2540] text-white py-4 px-6 md:px-12 flex justify-between items-center shadow-md sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <div className="bg-white px-2 py-1.5 rounded-lg flex items-center justify-center shadow-sm">
-             {/* Haqiqiy NBU Logotipi */}
              <img src="/nbu-logo.png" alt="NBU" className="h-7 w-auto object-contain" />
           </div>
           <div className="hidden sm:block">
@@ -214,15 +302,17 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-6">
-          {/* Profil Tugmasi */}
+          
           <div 
             onClick={() => setShowProfileModal(true)} 
             className="flex items-center gap-3 bg-white/10 py-1.5 px-2.5 sm:px-3 rounded-full border border-white/10 cursor-pointer hover:bg-white/20 transition-colors"
           >
-            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center border border-white/20">
-              <User className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center border border-white/20 font-bold text-sm">
+              {getInitials(profileData.fullName)}
             </div>
-            <span className="text-sm font-medium mr-1 hidden sm:block">{profileData.fullName.split(' ')[1]} {profileData.fullName.split(' ')[0]}</span>
+            <span className="text-sm font-medium mr-1 hidden sm:block">
+              {getShortName(profileData.fullName)}
+            </span>
           </div>
           
           <button onClick={handleLogout} className="hidden md:flex items-center gap-2 text-sm font-medium text-blue-200 hover:text-white transition-colors">

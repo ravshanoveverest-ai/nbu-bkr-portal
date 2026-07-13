@@ -20,7 +20,7 @@ export default function NotificationPage() {
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
 
-  // Xabarnoma Form State
+  // Xabarnoma Form State (MUAMMO SHU YERDA EDI: Boshlang'ich qiymatlar bo'sh massiv [] bo'lishi kerak)
   const [formData, setFormData] = useState({
     header: {
       department: '',
@@ -28,19 +28,9 @@ export default function NotificationPage() {
       employeeInfo: ''
     },
     personal: { passport: '', passportDate: '', pinfl: '' },
-    relatives: [{ 
-      relationship: '', 
-      fullName: '', 
-      passport: '', 
-      passportDate: '',
-      pinfl: '', 
-      noInfo: false,
-      worksAtNBU: false,
-      nbuBranch: '',
-      nbuPosition: ''
-    }],
-    myCompanies: [{ companyName: '', stir: '', isLeader: '', roleInCompany: '', sharePercent: '', noDetails: false }],
-    relativeCompanies: [{ relativeName: '', companyName: '', stir: '', isLeader: '', roleInCompany: '', sharePercent: '', noDetails: false }],
+    relatives: [] as any[], // BO'SH MASSIV QILINDI
+    myCompanies: [] as any[], // BO'SH MASSIV QILINDI
+    relativeCompanies: [] as any[], // BO'SH MASSIV QILINDI
     conflictInfo: ''
   });
 
@@ -145,6 +135,7 @@ export default function NotificationPage() {
       if (formData.personal.pinfl && !pinflRegex.test(formData.personal.pinfl)) newErrors.push("JSHSHIR 14 ta raqam bo'lishi shart");
     } 
     else if (currentStep === 2) {
+      // Agar bo'sh bo'lsa hech qanday xato bermaydi
       formData.relatives.forEach((rel, index) => {
         if (!rel.relationship) newErrors.push(`${index + 1}-qator: Qarindoshlik darajasini tanlang`);
         
@@ -185,18 +176,41 @@ export default function NotificationPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // MUAMMO SHU YERDA EDI: API orqali Backendga jo'natish logikasi qo'shildi
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateStep() && hasSignature) {
       setIsLoading(true);
-      // Imzoni rasm sifatida (Base64) olish
       const signatureImage = signatureCanvasRef.current?.toDataURL('image/png');
 
-      setTimeout(() => {
-        console.log("Xabarnoma yuborildi: ", { ...formData, signature: signatureImage });
+      try {
+        const res = await fetch('https://nbu-bkr-api.onrender.com/api/notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            fullName: formData.header.employeeInfo, // Xodim ismi va lavozimi
+            branch: formData.header.department,     // Filial/Bo'linma nomi
+            position: formData.header.managerInfo,  // Rahbar ismi va lavozimi (orqa fonga qo'shimcha ma'lumot)
+            message: formData.conflictInfo,         // Asosiy xabarnoma matni
+            signature: signatureImage,
+            // Qo'shimcha barcha ma'lumotlarni ham yuboramiz (keyinchalik kengaytirish uchun)
+            fullData: formData
+          })
+        });
+
+        if (res.ok) {
+          setShowSuccessModal(true);
+        } else {
+          alert("Xabarnomani saqlashda serverda xatolik yuz berdi.");
+        }
+      } catch (error) {
+        console.error("Yuborishda xatolik:", error);
+        alert("Server bilan ulanib bo'lmadi. Iltimos, backend ishlashini tekshiring.");
+      } finally {
         setIsLoading(false);
-        setShowSuccessModal(true);
-      }, 1500);
+      }
     }
   };
 
@@ -406,22 +420,26 @@ export default function NotificationPage() {
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="flex justify-between items-center mb-6 border-b pb-4">
                 <div>
-                  <h2 className="text-xl font-bold text-slate-800">2. Aloqador shaxslarga oid ma'lumotlar*</h2>
+                  <h2 className="text-xl font-bold text-slate-800">2. Aloqador shaxsga oid ma'lumotlar*</h2>
                   <p className="text-sm font-semibold text-slate-500 mt-1">Xodimning yaqin qarindoshiga oid ma'lumotlar</p>
                 </div>
-                <button onClick={addRelative} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors">
+                <button onClick={addRelative} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors border border-blue-200">
                   <Plus className="w-4 h-4" /> Qarindosh qo'shish
                 </button>
               </div>
 
+              {formData.relatives.length === 0 && (
+                <div className="text-center py-10 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl mb-6">
+                  <p className="text-slate-500 mb-4 font-medium px-4">Sizda NBU tizimida ishlaydigan yoki biznesga ega yaqin qarindoshlar yo'q bo'lsa, shunchaki "Keyingisi" tugmasini bosing.</p>
+                </div>
+              )}
+
               <div className="space-y-6">
                 {formData.relatives.map((relative, index) => (
                   <div key={index} className="p-5 border border-slate-200 rounded-xl bg-slate-50/50 relative group transition-all">
-                    {index > 0 && (
-                      <button onClick={() => removeRelative(index)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full hover:bg-red-200 transition-colors shadow-sm">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button onClick={() => removeRelative(index)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full hover:bg-red-200 transition-colors shadow-sm border border-red-200">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
                       <div className="md:col-span-1">
@@ -616,16 +634,25 @@ export default function NotificationPage() {
               <div>
                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-4">
                   <h2 className="text-sm font-bold text-slate-800 leading-relaxed md:w-3/4">
-                    Xodim qaysi yuridik shaxsning ustav fondi (ustav kapitali) aksiyalariga yoki ulushlariga egalik qilsa yoxud unda boshqaruv organining rahbari yoki a'zosi bo'lsa, o'sha yuridik shaxsga oid ma'lumotlar
+                    Xodim qaysi yuridik shaxsning aksiyalariga yoki ulushlariga egalik qilsa yoxud unda rahbar/a'zo bo'lsa
                   </h2>
-                  <button onClick={() => addCompany('myCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                  <button onClick={() => addCompany('myCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap border border-blue-200">
                     <Plus className="w-4 h-4" /> Qo'shish
                   </button>
                 </div>
 
+                {formData.myCompanies.length === 0 && formData.relativeCompanies.length === 0 && (
+                  <div className="text-center py-10 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl mb-6">
+                    <p className="text-slate-500 mb-4 font-medium px-4">Sizda aloqador yuridik shaxslar (kompaniyalar) bo'lmasa, shunchaki "Keyingisi" tugmasini bosing.</p>
+                  </div>
+                )}
+
                 <div className="space-y-4">
                   {formData.myCompanies.map((comp, idx) => (
-                    <div key={idx} className="flex flex-col gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-200 transition-all">
+                    <div key={idx} className="flex flex-col gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-200 transition-all relative">
+                      <button onClick={() => removeCompany('myCompanies', idx)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full hover:bg-red-200 transition-colors shadow-sm border border-red-200 z-10">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       <div className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="flex-1 w-full">
                           <label className="block text-xs font-bold text-slate-600 mb-1">Yuridik shaxsning nomi</label>
@@ -639,7 +666,7 @@ export default function NotificationPage() {
                               newComps[idx].companyName = e.target.value;
                               setFormData({...formData, myCompanies: newComps});
                             }}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white disabled:bg-slate-100" 
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white disabled:bg-slate-100 text-slate-900" 
                           />
                         </div>
                         <div className="w-full md:w-1/3">
@@ -655,14 +682,9 @@ export default function NotificationPage() {
                               newComps[idx].stir = e.target.value.replace(/\D/g, '');
                               setFormData({...formData, myCompanies: newComps});
                             }}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white disabled:bg-slate-100" 
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white disabled:bg-slate-100 text-slate-900" 
                           />
                         </div>
-                        {idx > 0 && (
-                           <button onClick={() => removeCompany('myCompanies', idx)} className="mb-0.5 p-2.5 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-transparent hover:border-red-200">
-                             <Trash2 className="w-4 h-4"/>
-                           </button>
-                        )}
                       </div>
 
                       <div className="mt-2">
@@ -776,16 +798,19 @@ export default function NotificationPage() {
               <div>
                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-4">
                   <h2 className="text-sm font-bold text-slate-800 leading-relaxed md:w-3/4">
-                    Xodimning yaqin qarindoshi qaysi yuridik shaxsning ustav fondi (ustav kapitali) aksiyalariga yoki ulushlariga egalik qilsa yoxud unda boshqaruv organining rahbari yoki a'zosi bo'lsa, o'sha yuridik shaxsga oid ma'lumotlar
+                    Xodimning yaqin qarindoshi qaysi yuridik shaxsning aksiyalariga yoki ulushlariga egalik qilsa yoxud unda rahbar/a'zo bo'lsa
                   </h2>
-                  <button onClick={() => addCompany('relativeCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
+                  <button onClick={() => addCompany('relativeCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap border border-blue-200">
                     <Plus className="w-4 h-4" /> Qo'shish
                   </button>
                 </div>
 
                 <div className="space-y-4">
                   {formData.relativeCompanies.map((comp, idx) => (
-                    <div key={idx} className="flex flex-col gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-200 transition-all">
+                    <div key={idx} className="flex flex-col gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-200 transition-all relative">
+                      <button onClick={() => removeCompany('relativeCompanies', idx)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full hover:bg-red-200 transition-colors shadow-sm border border-red-200 z-10">
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                       
                       <div className="flex flex-col md:flex-row gap-4 items-end">
                         <div className="w-full md:w-1/3">
@@ -840,11 +865,6 @@ export default function NotificationPage() {
                             className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white disabled:bg-slate-100 text-slate-900" 
                           />
                         </div>
-                        {idx > 0 && (
-                           <button onClick={() => removeCompany('relativeCompanies', idx)} className="mb-0.5 p-2.5 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-transparent hover:border-red-200">
-                             <Trash2 className="w-4 h-4"/>
-                           </button>
-                        )}
                       </div>
 
                       <div className="mt-2">

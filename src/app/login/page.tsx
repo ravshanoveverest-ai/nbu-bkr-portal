@@ -1,97 +1,10 @@
-// 'use client';
-
-// import React, { useState } from 'react';
-// import Link from 'next/link';
-// import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
-
-// export default function LoginPage() {
-//   const [email, setEmail] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [showPassword, setShowPassword] = useState(false);
-
-//   const handleLogin = (e: React.FormEvent) => {
-//     e.preventDefault();
-//     console.log('Login attempt:', { email, password });
-//   };
-
-//   return (
-//     <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
-//       <div className="max-w-md w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-//         <div className="bg-[#0A2540] p-6 text-center">
-//           <h1 className="text-2xl font-bold text-white tracking-wide">NBU Komplayens</h1>
-//           <p className="text-slate-300 text-sm mt-2">Tizimga kirish</p>
-//         </div>
-        
-//         <div className="p-8">
-//           <form onSubmit={handleLogin} className="space-y-6">
-//             <div>
-//               <label className="block text-sm font-medium text-slate-700 mb-1.5">Email</label>
-//               <div className="relative">
-//                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-//                   <Mail className="h-5 w-5 text-slate-400" />
-//                 </div>
-//                 <input
-//                   type="email"
-//                   value={email}
-//                   onChange={(e) => setEmail(e.target.value)}
-//                   className="block w-full pl-10 pr-3 py-2.5 text-slate-900 placeholder:text-slate-400 bg-white border border-slate-300 rounded-lg focus:ring-[#0A2540] focus:border-[#0A2540] sm:text-sm outline-none transition-colors"
-//                   placeholder="name@nbu.uz"
-//                   required
-//                 />
-//               </div>
-//             </div>
-
-//             <div>
-//               <label className="block text-sm font-medium text-slate-700 mb-1.5">Parol</label>
-//               <div className="relative">
-//                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-//                   <Lock className="h-5 w-5 text-slate-400" />
-//                 </div>
-//                 <input
-//                   type={showPassword ? "text" : "password"}
-//                   value={password}
-//                   onChange={(e) => setPassword(e.target.value)}
-//                   className="block w-full pl-10 pr-10 py-2.5 text-slate-900 placeholder:text-slate-400 bg-white border border-slate-300 rounded-lg focus:ring-[#0A2540] focus:border-[#0A2540] sm:text-sm outline-none transition-colors"
-//                   placeholder="••••••••"
-//                   required
-//                 />
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowPassword(!showPassword)}
-//                   className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
-//                 >
-//                   {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-//                 </button>
-//               </div>
-//             </div>
-
-//             <button
-//               type="submit"
-//               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-[#0A2540] hover:bg-[#113559] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A2540] transition-colors"
-//             >
-//               Kirish
-//             </button>
-//           </form>
-
-//           <div className="mt-6 text-center text-sm">
-//             <span className="text-slate-500">Hisobingiz yo'qmi? </span>
-//             <Link href="/register" className="text-blue-600 font-medium hover:text-blue-500">
-//               Ro'yxatdan o'tish
-//             </Link>
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// }
-
 'use client';
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { 
   Lock, Mail, AlertCircle, ArrowRight, User, 
-  KeyRound, CheckCircle, X, ShieldCheck
+  KeyRound, CheckCircle, X, ShieldCheck, Eye, EyeOff
 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -105,91 +18,157 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // Parolni tiklash (Forgot Password) modali state'lari
+  // Parolni tiklash modali state'lari
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotStep, setForgotStep] = useState<1 | 2 | 3>(1);
   const [resetEmail, setResetEmail] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // --- ASOSIY KONTROLLERLAR ---
+  // === HAQIQIY BACKENDGA ULANISH (API KONTROLLERLAR) ===
+  const API_URL = 'https://nbu-bkr-api.onrender.com/api/auth';
 
-  const handleAuth = (e: React.FormEvent) => {
+  const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
     setSuccess('');
 
-    setTimeout(() => {
+    try {
       if (authMode === 'register') {
-        // Ro'yxatdan o'tish logikasi (Demo)
         if (password.length < 6) {
-          setError("Parol kamida 6 ta belgidan iborat bo'lishi kerak.");
-          setIsLoading(false);
-          return;
+          throw new Error("Parol kamida 6 ta belgidan iborat bo'lishi kerak.");
         }
+
+        // BACKEND: Register API chaqiruvi
+        const res = await fetch(`${API_URL}/register`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fullName, email, password }),
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Xatolik yuz berdi");
+
         setSuccess("Muvaffaqiyatli ro'yxatdan o'tdingiz! Tizimga kiring.");
         setAuthMode('login');
         setPassword('');
-        setIsLoading(false);
+        
       } else {
-        // Tizimga kirish logikasi (Demo)
-        if (email.includes('admin@nbu.uz')) {
-          router.push('/admin'); // Admin uchun
-        } else if (email && password) {
-          router.push('/dashboard'); // Xodim uchun
-        } else {
-          setError("Iltimos, email va parolni kiriting.");
-        }
-        setIsLoading(false);
+        // BACKEND: Login API chaqiruvi
+        const res = await fetch(`${API_URL}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Email yoki parol xato");
+
+        // Tokenni saqlash (Sessiya)
+        localStorage.setItem('bkr_token', data.token);
+        localStorage.setItem('user_info', JSON.stringify({ 
+          fullName: data.fullName, 
+          email: data.email, 
+          role: data.role 
+        }));
+
+        setSuccess("Tizimga kirilmoqda...");
+        
+        // Muvaffaqiyatli bo'lsa yo'naltirish
+        setTimeout(() => {
+          if (data.role === 'admin' || email.includes('admin@nbu.uz')) {
+            router.push('/admin'); 
+          } else {
+            router.push('/dashboard'); 
+          }
+        }, 1000);
       }
-    }, 1000);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // --- PAROLNI TIKLASH KONTROLLERLARI ---
-
-  const handleSendResetCode = (e: React.FormEvent) => {
+  // --- PAROLNI TIKLASH ---
+  const handleSendResetCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
+    setError('');
+    
+    try {
+      const res = await fetch(`${API_URL}/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail }),
+      });
+      
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      
+      setSuccess("Kodingiz emailga jo'natildi!");
+      setForgotStep(2); 
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
       setIsLoading(false);
-      setForgotStep(2); // Email tasdiqlangach, kod so'rash bosqichiga o'tadi
-    }, 800);
+    }
   };
 
-  const handleVerifyCode = (e: React.FormEvent) => {
+  const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      if (resetCode === '123456') { // Demo uchun to'g'ri kod
-        setForgotStep(3); // Yangi parol kiritish bosqichiga o'tadi
-      } else {
-        setError("Tasdiqlash kodi noto'g'ri. (Demo kod: 123456)");
-      }
-    }, 800);
+    setError('');
+    // Validatsiya qismi (asl tasdiqlash backendda newPassword bilan yuborganda bo'ladi)
+    if (resetCode.length === 6) { 
+      setForgotStep(3); 
+    } else {
+      setError("Kod 6 xonali bo'lishi kerak.");
+    }
   };
 
-  const handleSaveNewPassword = (e: React.FormEvent) => {
+  const handleSaveNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     if (newPassword !== confirmNewPassword) {
       setError("Parollar bir-biriga mos kelmadi!");
       return;
     }
+    
     setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const res = await fetch(`${API_URL}/reset-password`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: resetEmail, otp: resetCode, newPassword }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Xatolik yuz berdi");
+
       setShowForgotModal(false);
       setForgotStep(1);
       setResetEmail('');
       setResetCode('');
       setNewPassword('');
       setConfirmNewPassword('');
+      setShowNewPassword(false);
+      setShowConfirmPassword(false);
       setSuccess("Parolingiz muvaffaqiyatli yangilandi! Tizimga kirishingiz mumkin.");
-    }, 1000);
+      setAuthMode('login');
+      setEmail(resetEmail); 
+      setPassword('');
+
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -204,7 +183,13 @@ export default function LoginPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 relative animate-in zoom-in-95">
             <button 
-              onClick={() => {setShowForgotModal(false); setForgotStep(1); setError('');}} 
+              onClick={() => {
+                setShowForgotModal(false); 
+                setForgotStep(1); 
+                setError('');
+                setShowNewPassword(false);
+                setShowConfirmPassword(false);
+              }} 
               className="absolute top-4 right-4 text-slate-400 hover:bg-slate-100 p-2 rounded-full transition-colors"
             >
               <X className="w-5 h-5" />
@@ -264,35 +249,53 @@ export default function LoginPage() {
                   />
                 </div>
                 <button type="submit" disabled={isLoading} className="w-full py-3 bg-[#0A2540] text-white rounded-xl font-bold hover:bg-[#113559] transition-colors disabled:opacity-70">
-                  {isLoading ? 'Tekshirilmoqda...' : 'Tasdiqlash'}
+                  Tasdiqlash
                 </button>
               </form>
             )}
 
-            {/* 3-BOSQICH: YANGI PAROL */}
+            {/* 3-BOSQICH: YANGI PAROL (Ko'zcha bilan) */}
             {forgotStep === 3 && (
               <form onSubmit={handleSaveNewPassword} className="space-y-4">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">Yangi parol</label>
-                  <input
-                    type="password"
-                    required
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none text-sm"
-                    placeholder="••••••••"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="w-full pl-4 pr-10 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none text-sm"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-1.5">Parolni tasdiqlang</label>
-                  <input
-                    type="password"
-                    required
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    className="w-full px-4 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none text-sm"
-                    placeholder="••••••••"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? "text" : "password"}
+                      required
+                      value={confirmNewPassword}
+                      onChange={(e) => setConfirmNewPassword(e.target.value)}
+                      className="w-full pl-4 pr-10 py-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-600 outline-none text-sm"
+                      placeholder="••••••••"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
                 <button type="submit" disabled={isLoading} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors disabled:opacity-70">
                   {isLoading ? 'Saqlanmoqda...' : 'Saqlash va Kirish'}
@@ -306,7 +309,6 @@ export default function LoginPage() {
       {/* HEADER LOGO QISMI */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
         <div className="flex justify-center mb-6">
-          {/* NBU HAQIQIY LOGOTIPI */}
           <div className="bg-white p-3 rounded-2xl shadow-xl shadow-black/10 flex items-center justify-center w-24 h-24">
              <img src="/nbu-logo.png" alt="NBU Logo" className="w-full h-full object-contain" />
           </div>
@@ -392,13 +394,20 @@ export default function LoginPage() {
                   <Lock className="h-5 w-5 text-slate-400" />
                 </div>
                 <input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 sm:text-sm font-medium text-slate-900 transition-shadow"
+                  className="block w-full pl-10 pr-10 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 sm:text-sm font-medium text-slate-900 transition-shadow"
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
 

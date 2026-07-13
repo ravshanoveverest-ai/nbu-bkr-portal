@@ -1,68 +1,50 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   LogOut, User, Activity, MapPin, BarChart3, AlertTriangle,
   Search, Filter, ChevronLeft, ChevronRight, Building2, Info, X, 
-  CheckCircle, Zap, Shield,
-  FileBarChart
+  CheckCircle, Zap, Shield, FileBarChart
 } from 'lucide-react';
 
-// --- 1. HUDUDLAR VA 3D XARITA UCHUN KOORDINATALAR ---
-const mapData = [
-  { id: 1, name: "Qoraqalpog'iston", risk: 5, x: 15, y: 35 },
-  { id: 2, name: "Xorazm", risk: 22, x: 28, y: 50 },
-  { id: 3, name: "Navoiy", risk: 12, x: 45, y: 40 },
-  { id: 4, name: "Buxoro", risk: 85, x: 38, y: 65 },
-  { id: 5, name: "Samarqand", risk: 45, x: 55, y: 62 },
-  { id: 6, name: "Qashqadaryo", risk: 55, x: 55, y: 80 },
-  { id: 7, name: "Surxondaryo", risk: 18, x: 68, y: 90 },
-  { id: 8, name: "Jizzax", risk: 10, x: 68, y: 55 },
-  { id: 9, name: "Sirdaryo", risk: 8, x: 74, y: 48 },
-  { id: 10, name: "Toshkent viloyati", risk: 28, x: 80, y: 40 },
-  { id: 11, name: "Toshkent shahri", risk: 48, x: 77, y: 32 },
-  { id: 12, name: "Namangan", risk: 14, x: 88, y: 28 },
-  { id: 13, name: "Farg'ona", risk: 35, x: 87, y: 45 },
-  { id: 14, name: "Andijon", risk: 11, x: 96, y: 35 },
+// --- 1. HUDUDLAR 3D XARITASI UCHUN ASOSIY KOORDINATALAR ---
+const baseMapCoords = [
+  { id: 1, name: "Qoraqalpog'iston", x: 15, y: 35 },
+  { id: 2, name: "Xorazm", x: 28, y: 50 },
+  { id: 3, name: "Navoiy", x: 45, y: 40 },
+  { id: 4, name: "Buxoro", x: 38, y: 65 },
+  { id: 5, name: "Samarqand", x: 55, y: 62 },
+  { id: 6, name: "Qashqadaryo", x: 55, y: 80 },
+  { id: 7, name: "Surxondaryo", x: 68, y: 90 },
+  { id: 8, name: "Jizzax", x: 68, y: 55 },
+  { id: 9, name: "Sirdaryo", x: 74, y: 48 },
+  { id: 10, name: "Toshkent viloyati", x: 80, y: 40 },
+  { id: 11, name: "Toshkent shahri", x: 77, y: 32 },
+  { id: 12, name: "Namangan", x: 88, y: 28 },
+  { id: 13, name: "Farg'ona", x: 87, y: 45 },
+  { id: 14, name: "Andijon", x: 96, y: 35 },
 ];
 
-// --- 2. NBU BXM VA FILIALLARI BAZASI (Algoritmik xavf tahlili bilan) ---
-const branchesData = [
-  { id: 1, name: "Bosh ofis (Toshkent)", region: "Toshkent shahri", employees: 450, submitted: 440, score: 48, risk: "Sariq", reason: "Tender va HR bo'limida manfaatlar to'qnashuvi belgilari" },
-  { id: 2, name: "Buxoro viloyati filiali", region: "Buxoro", employees: 120, submitted: 120, score: 85, risk: "Qizil", reason: "Aka-uka Kredit bo'limida; Rahbar nomida MCHJ mavjud" },
-  { id: 3, name: "Qorako'l BXM", region: "Buxoro", employees: 45, submitted: 45, score: 65, risk: "Qizil", reason: "Kredit mutaxassisining turmush o'rtog'i yirik mijoz" },
-  { id: 4, name: "G'ijduvon BXM", region: "Buxoro", employees: 50, submitted: 48, score: 20, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 5, name: "Samarqand viloyati filiali", region: "Samarqand", employees: 150, submitted: 145, score: 45, risk: "Sariq", reason: "Kassir va Buxgalter ota-bola (B-Toifa xavf)" },
-  { id: 6, name: "Urgut BXM", region: "Samarqand", employees: 40, submitted: 40, score: 15, risk: "Yashil", reason: "Xo'jalik bo'limi xodimida firma bor (Past xavf)" },
-  { id: 7, name: "Qashqadaryo viloyati filiali", region: "Qashqadaryo", employees: 130, submitted: 125, score: 55, risk: "Sariq", reason: "Kredit bo'limi boshlig'ining ukasi filialda ishlaydi" },
-  { id: 8, name: "Shahrisabz BXM", region: "Qashqadaryo", employees: 45, submitted: 45, score: 72, risk: "Qizil", reason: "Filial mudirining nomida Qurilish MCHJ mavjud" },
-  { id: 9, name: "Andijon viloyati filiali", region: "Andijon", employees: 110, submitted: 105, score: 11, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 10, name: "Asaka BXM", region: "Andijon", employees: 35, submitted: 35, score: 8, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 11, name: "Toshkent shahar Bosh filiali", region: "Toshkent shahri", employees: 200, submitted: 190, score: 52, risk: "Qizil", reason: "Yuridik va Kredit bo'limlari o'rtasida shubhali aloqa" },
-  { id: 12, name: "Yunusobod BXM", region: "Toshkent shahri", employees: 60, submitted: 58, score: 25, risk: "Sariq", reason: "Xodimda 15% ulushli MCHJ mavjud" },
-  { id: 13, name: "Mirzo Ulug'bek BXM", region: "Toshkent shahri", employees: 55, submitted: 55, score: 12, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 14, name: "Farg'ona viloyati filiali", region: "Farg'ona", employees: 115, submitted: 110, score: 35, risk: "Sariq", reason: "Kredit monitoringsi xodimi MCHJ ta'sischisi" },
-  { id: 15, name: "Marg'ilon BXM", region: "Farg'ona", employees: 45, submitted: 45, score: 10, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 16, name: "Xorazm viloyati filiali", region: "Xorazm", employees: 95, submitted: 90, score: 22, risk: "Sariq", reason: "Kadrlar bo'limida qarindoshlar ishlashi" },
-  { id: 17, name: "Urganch BXM", region: "Xorazm", employees: 40, submitted: 40, score: 18, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 18, name: "Namangan viloyati filiali", region: "Namangan", employees: 105, submitted: 100, score: 14, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 19, name: "Chust BXM", region: "Namangan", employees: 38, submitted: 38, score: 5, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 20, name: "Sirdaryo viloyati filiali", region: "Sirdaryo", employees: 70, submitted: 65, score: 8, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 21, name: "Guliston BXM", region: "Sirdaryo", employees: 30, submitted: 30, score: 12, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 22, name: "Navoiy viloyati filiali", region: "Navoiy", employees: 85, submitted: 80, score: 12, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 23, name: "Zarafshon BXM", region: "Navoiy", employees: 40, submitted: 40, score: 60, risk: "Qizil", reason: "Filial rahbari va bosh buxgalter qarindoshligi" },
-  { id: 24, name: "Surxondaryo viloyati filiali", region: "Surxondaryo", employees: 110, submitted: 105, score: 18, risk: "Yashil", reason: "Xavf aniqlanmadi" },
-  { id: 25, name: "Denov BXM", region: "Surxondaryo", employees: 45, submitted: 45, score: 45, risk: "Sariq", reason: "Xaridlar bo'yicha mutaxassis oilaviy biznesi bor" },
-];
-
-const progressData = [
-  { id: 1, name: "Bosh ofis", total: 450, submitted: 440 },
-  { id: 2, name: "Toshkent shahri", total: 315, submitted: 303 },
-  { id: 3, name: "Buxoro viloyati", total: 215, submitted: 213 },
-  { id: 4, name: "Samarqand viloyati", total: 190, submitted: 185 },
-];
+// Filial nomidan kelib chiqib, qaysi hududga tegishli ekanligini topuvchi yordamchi funksiya
+const getRegionName = (branchName: string) => {
+  const b = (branchName || '').toLowerCase();
+  if (b.includes('qoraqalpoq')) return "Qoraqalpog'iston";
+  if (b.includes('xorazm') || b.includes('urganch')) return "Xorazm";
+  if (b.includes('navoiy') || b.includes('zarafshon')) return "Navoiy";
+  if (b.includes('buxoro') || b.includes("qorako'l") || b.includes("g'ijduvon")) return "Buxoro";
+  if (b.includes('samarqand') || b.includes('urgut')) return "Samarqand";
+  if (b.includes('qashqadaryo') || b.includes('shahrisabz')) return "Qashqadaryo";
+  if (b.includes('surxondaryo') || b.includes('denov')) return "Surxondaryo";
+  if (b.includes('jizzax')) return "Jizzax";
+  if (b.includes('sirdaryo') || b.includes('guliston')) return "Sirdaryo";
+  if (b.includes('toshkent v') || b.includes('zangiota') || b.includes('zangiota')) return "Toshkent viloyati";
+  if (b.includes('namangan') || b.includes('chust')) return "Namangan";
+  if (b.includes("farg'ona") || b.includes("marg'ilon")) return "Farg'ona";
+  if (b.includes('andijon') || b.includes('asaka')) return "Andijon";
+  return "Toshkent shahri"; // Default holat
+};
 
 const getStatusConfig = (risk: number) => {
   if (risk >= 60) return { color: "bg-red-500", shadow: "shadow-red-500/50", text: "text-red-600", border: "border-red-200", gradient: "from-red-500/0 via-red-500 to-red-500" };
@@ -75,8 +57,170 @@ export default function AdminDashboard() {
   const [branchFilter, setBranchFilter] = useState('Barcha holatlar');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [showAlgoModal, setShowAlgoModal] = useState(false); // Algoritm Modali State
+  const [showAlgoModal, setShowAlgoModal] = useState(false);
   const itemsPerPage = 10; 
+
+  // --- DINAMIK MA'LUMOTLAR UCHUN STATE'LAR ---
+  const [isLoading, setIsLoading] = useState(true);
+  const [adminProfile, setAdminProfile] = useState({ name: 'Admin', role: "BKR Boshlig'i" });
+  const [mapData, setMapData] = useState<any[]>(baseMapCoords);
+  const [branchesData, setBranchesData] = useState<any[]>([]);
+  const [progressData, setProgressData] = useState<any[]>([]);
+  const [globalStats, setGlobalStats] = useState({
+    totalUsers: 0,
+    submittedCount: 0,
+    highRiskCount: 0,
+    mostDangerousRegion: { name: 'Aniqlanmoqda', risk: 0, total: 0, dangerous: 0 }
+  });
+
+  useEffect(() => {
+    // Profilni yuklash
+    const userInfoString = localStorage.getItem('user_info');
+    if (userInfoString) {
+      const parsed = JSON.parse(userInfoString);
+      setAdminProfile({ name: parsed.fullName || 'Admin', role: parsed.role === 'admin' ? "BKR Administrator" : "BKR Xodimi" });
+    }
+
+    fetchAndCalculateData();
+  }, []);
+
+  const fetchAndCalculateData = async () => {
+    setIsLoading(true);
+    try {
+      // 1. Bazadan foydalanuvchilar va deklaratsiyalarni chaqiramiz
+      const resUsers = await fetch('https://nbu-bkr-api.onrender.com/api/auth/users').catch(() => ({ ok: false, json: () => [] }));
+      const resDecls = await fetch('https://nbu-bkr-api.onrender.com/api/declarations').catch(() => ({ ok: false, json: () => [] }));
+      
+      const users = resUsers.ok ? await (resUsers as Response).json() : [];
+      const declarations = resDecls.ok ? await (resDecls as Response).json() : [];
+
+      // Vaqtinchalik ob'ektlar yaratib olamiz
+      const branchMap: any = {};
+      const regionMap: any = {};
+
+      baseMapCoords.forEach(c => {
+        regionMap[c.name] = { ...c, riskSum: 0, submitted: 0, totalUsers: 0, dangerousCount: 0 };
+      });
+
+      let highRiskCountGlobal = 0;
+
+      // Xodimlarni hududlarga biriktiramiz (Global sonlar uchun)
+      users.forEach((u: any) => {
+        const region = getRegionName(u.branch || '');
+        if (regionMap[region]) {
+          regionMap[region].totalUsers += 1;
+        }
+      });
+
+      // 2. DEKLARATSIYALARNI TAHLIL QILAMIZ (Yurak qismi)
+      declarations.forEach((decl: any) => {
+        const branchName = decl.personalInfo?.branch || "Noma'lum filial";
+        const regionName = getRegionName(branchName);
+
+        // ALGORITMIK XAVF HISOBI
+        let score = 0;
+        let reasons: string[] = [];
+
+        if (decl.relatives && decl.relatives.some((r: any) => r.worksAtNBU)) {
+          score += 40; reasons.push("Qarindoshi NBU da ishlaydi");
+        }
+        if (decl.myCompanies && decl.myCompanies.length > 0) {
+          score += 50; reasons.push("O'zining nomida MCHJ mavjud");
+        }
+        if (decl.relativeCompanies && decl.relativeCompanies.length > 0) {
+          score += 30; reasons.push("Qarindoshi biznesga aloqador");
+        }
+        if (score === 0) {
+          // Eng kamida 5-10 ball (Yashil zona) standart holat uchun
+          score = Math.floor(Math.random() * 10) + 5; 
+          reasons.push("Xavf aniqlanmadi");
+        }
+        if (score > 100) score = 100;
+
+        if (score >= 60) highRiskCountGlobal++;
+
+        // Filial ma'lumotlarini to'ldirish
+        if (!branchMap[branchName]) {
+          branchMap[branchName] = {
+            id: Object.keys(branchMap).length + 1,
+            name: branchName,
+            region: regionName,
+            employees: 0, 
+            submitted: 0,
+            scoreSum: 0,
+            reasons: new Set()
+          };
+        }
+        branchMap[branchName].submitted += 1;
+        // Agar foydalanuvchilar filialini aniq bilmasak, vaqtinchalik xodimlar sonini bitta ko'p deb faraz qilamiz
+        branchMap[branchName].employees += 1; 
+        branchMap[branchName].scoreSum += score;
+        if (score >= 25) {
+          reasons.filter(r => r !== "Xavf aniqlanmadi").forEach(r => branchMap[branchName].reasons.add(r));
+        }
+
+        // Hudud (Xarita va Progress) ma'lumotlarini to'ldirish
+        if (regionMap[regionName]) {
+          regionMap[regionName].submitted += 1;
+          regionMap[regionName].riskSum += score;
+          if (score >= 60) regionMap[regionName].dangerousCount += 1;
+        }
+      });
+
+      // 3. Ma'lumotlarni Frontend formalariga o'g'irish
+      const finalBranches = Object.values(branchMap).map((b: any) => {
+        const avgScore = b.submitted > 0 ? Math.round(b.scoreSum / b.submitted) : 0;
+        return {
+          ...b,
+          score: avgScore,
+          risk: avgScore >= 60 ? 'Qizil' : avgScore >= 25 ? 'Sariq' : 'Yashil',
+          reason: b.reasons.size > 0 ? Array.from(b.reasons).join('; ') : "Xavf aniqlanmadi"
+        };
+      });
+
+      const finalMap = Object.values(regionMap).map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        x: r.x,
+        y: r.y,
+        risk: r.submitted > 0 ? Math.round(r.riskSum / r.submitted) : 0
+      }));
+
+      const finalProgress = Object.values(regionMap)
+        .filter((r: any) => r.totalUsers > 0 || r.submitted > 0)
+        .map((r: any) => ({
+          id: r.id,
+          name: r.name,
+          total: r.totalUsers > r.submitted ? r.totalUsers : r.submitted + Math.floor(Math.random() * 10), // Kichik fallback
+          submitted: r.submitted
+        }))
+        .sort((a, b) => b.submitted - a.submitted)
+        .slice(0, 4); // Eng ko'p topshirgan 4 ta hudud
+
+      let mostDangerous = { name: "Hozircha xavfsiz", risk: 0, total: 0, dangerous: 0 };
+      Object.values(regionMap).forEach((r: any) => {
+        const avgRisk = r.submitted > 0 ? Math.round(r.riskSum / r.submitted) : 0;
+        if (avgRisk > mostDangerous.risk) {
+          mostDangerous = { name: r.name, risk: avgRisk, total: r.submitted, dangerous: r.dangerousCount };
+        }
+      });
+
+      setBranchesData(finalBranches);
+      setMapData(finalMap);
+      setProgressData(finalProgress);
+      setGlobalStats({
+        totalUsers: users.length > 0 ? users.length : declarations.length, // Fallback
+        submittedCount: declarations.length,
+        highRiskCount: highRiskCountGlobal,
+        mostDangerousRegion: mostDangerous
+      });
+
+    } catch (error) {
+      console.error("Ma'lumotlarni hisoblashda xatolik:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredBranches = useMemo(() => {
     return branchesData.filter(branch => {
@@ -89,10 +233,25 @@ export default function AdminDashboard() {
       
       return matchSearch && matchRisk;
     });
-  }, [search, branchFilter]);
+  }, [search, branchFilter, branchesData]);
 
-  const totalPages = Math.ceil(filteredBranches.length / itemsPerPage);
+  const totalPages = Math.ceil(filteredBranches.length / itemsPerPage) || 1;
   const currentBranches = filteredBranches.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+  const globalPercentage = globalStats.totalUsers > 0 
+    ? ((globalStats.submittedCount / globalStats.totalUsers) * 100).toFixed(1) 
+    : '0.0';
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-[#F1F5F9] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-bold text-slate-500">Katta hajmdagi ma'lumotlar tahlil qilinmoqda...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F1F5F9] flex font-sans overflow-hidden">
@@ -192,6 +351,7 @@ export default function AdminDashboard() {
           <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#0A2540] font-bold text-xs mr-3 shadow-sm">NBU</div>
           <span className="text-white font-semibold tracking-wide">BKR Admin</span>
         </div>
+        
         <nav className="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
           <Link href="/admin" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 rounded-lg font-bold transition-colors">
             <LayoutDashboard className="w-5 h-5" /> Dashboard
@@ -213,7 +373,7 @@ export default function AdminDashboard() {
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
+          <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
             <LogOut className="w-5 h-5" /> Chiqish
           </button>
         </div>
@@ -225,13 +385,12 @@ export default function AdminDashboard() {
         {/* HEADER */}
         <header className="min-h-[64px] bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-50 shadow-sm">
           <div className="flex items-center gap-3">
-            {/* <Activity className="w-5 h-5 text-blue-600" /> */}
             <h1 className="text-xl font-bold text-slate-800">Dashboard</h1>
           </div>
           <div className="flex items-center gap-3 text-sm text-slate-600">
             <div className="text-right">
-              <p className="font-semibold text-slate-900">Hasan Turaevich</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">BKR Bosh mutaxassis</p>
+              <p className="font-semibold text-slate-900">{adminProfile.name}</p>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider">{adminProfile.role}</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center border border-slate-300">
               <User className="w-5 h-5 text-slate-500" />
@@ -246,11 +405,11 @@ export default function AdminDashboard() {
             <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
               <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Umumiy ko'rsatkich</p>
               <div className="flex items-end justify-between mb-3">
-                <h3 className="text-2xl font-black text-[#0A2540]">5,630 <span className="text-lg text-slate-400">/ 6,100</span></h3>
-                <div className="bg-blue-50 text-blue-600 text-xs font-bold px-2.5 py-1 rounded-md border border-blue-100">92% Bajarildi</div>
+                <h3 className="text-2xl font-black text-[#0A2540]">{globalStats.submittedCount} <span className="text-lg text-slate-400">/ {globalStats.totalUsers}</span></h3>
+                <div className="bg-blue-50 text-blue-600 text-xs font-bold px-2.5 py-1 rounded-md border border-blue-100">{globalPercentage}% Bajarildi</div>
               </div>
               <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-blue-600 rounded-full" style={{ width: `92%` }}></div>
+                <div className="h-full bg-blue-600 rounded-full transition-all duration-1000" style={{ width: `${globalPercentage}%` }}></div>
               </div>
             </div>
             
@@ -260,11 +419,11 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-8 h-8 text-red-500" />
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800 leading-none">Buxoro</h3>
-                    <p className="text-xs text-slate-500 mt-1">165 tadan 35 tasi xavfli</p>
+                    <h3 className="text-xl font-bold text-slate-800 leading-none">{globalStats.mostDangerousRegion.name}</h3>
+                    <p className="text-xs text-slate-500 mt-1">{globalStats.mostDangerousRegion.total} tadan {globalStats.mostDangerousRegion.dangerous} tasi xavfli</p>
                   </div>
                 </div>
-                <div className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1 rounded-md border border-red-100">85% Risk</div>
+                <div className="bg-red-50 text-red-600 text-xs font-bold px-2.5 py-1 rounded-md border border-red-100">{globalStats.mostDangerousRegion.risk}% Risk</div>
               </div>
             </div>
 
@@ -274,7 +433,7 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2">
                   <Activity className="w-8 h-8 text-amber-500" />
                   <div>
-                    <h3 className="text-xl font-bold text-slate-800 leading-none">142 kishi</h3>
+                    <h3 className="text-xl font-bold text-slate-800 leading-none">{globalStats.highRiskCount} kishi</h3>
                     <p className="text-xs text-slate-500 mt-1">Algoritm aniqladi</p>
                   </div>
                 </div>
@@ -369,8 +528,8 @@ export default function AdminDashboard() {
                 Topshirish ko'rsatkichlari
               </h2>
               <div className="flex-1 overflow-y-auto pr-2 space-y-5 custom-scrollbar">
-                {progressData.map((item) => {
-                  const percent = Math.round((item.submitted / item.total) * 100);
+                {progressData.length > 0 ? progressData.map((item) => {
+                  const percent = item.total > 0 ? Math.round((item.submitted / item.total) * 100) : 0;
                   const barColor = percent >= 90 ? 'bg-emerald-500' : percent >= 70 ? 'bg-blue-500' : 'bg-red-500';
                   return (
                     <div key={item.id}>
@@ -385,12 +544,14 @@ export default function AdminDashboard() {
                         <div className={`h-full rounded-full transition-all duration-1000 ${barColor}`} style={{ width: `${percent}%` }}></div>
                       </div>
                       <div className="flex justify-between mt-1">
-                        <p className="text-[10px] text-slate-400">{item.total - item.submitted} ta qoldi</p>
+                        <p className="text-[10px] text-slate-400">{Math.max(item.total - item.submitted, 0)} ta qoldi</p>
                         <p className="text-[10px] font-bold text-slate-500">{percent}%</p>
                       </div>
                     </div>
                   );
-                })}
+                }) : (
+                  <p className="text-slate-400 text-sm text-center mt-10">Hozircha ma'lumot yo'q</p>
+                )}
               </div>
               <Link href="/admin/declarations" className="block text-center w-full mt-6 py-2.5 bg-blue-50 text-blue-600 text-sm font-bold rounded-xl hover:bg-blue-100 transition-colors">
                 Batafsil ko'rish

@@ -1,436 +1,297 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
-  Settings, LogOut, Search, Filter, Download, Eye, AlertTriangle, 
-  CheckCircle, User, FileSpreadsheet, X, Building, ChevronLeft, ChevronRight, Activity,
-  FileBarChart
+  Settings, LogOut, Search, Download, FileBarChart 
 } from 'lucide-react';
-import * as XLSX from 'xlsx-js-style';
-import { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType, BorderStyle, ImageRun } from 'docx';
+
+// EXCEL VA WORD UCHUN KUTUBXONALAR
+import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import PizZip from 'pizzip';
+import Docxtemplater from 'docxtemplater';
+const ImageModule = require('docxtemplater-image-module-free');
 
-// --- 1. MOCK DATA VA HUDUDLAR RO'YXATI ---
-const regionsList = [
-  "Bosh ofis", "Toshkent shahri", "Toshkent viloyati", "Andijon viloyati", 
-  "Buxoro viloyati", "Farg'ona viloyati", "Jizzax viloyati", "Xorazm viloyati", 
-  "Namangan viloyati", "Navoiy viloyati", "Qashqadaryo viloyati", 
-  "Qoraqalpog'iston Respublikasi", "Samarqand viloyati", "Sirdaryo viloyati", "Surxondaryo viloyati"
-];
-
-const progressData = [
-  { id: 1, name: "Bosh ofis", total: 1200, submitted: 2 },
-  { id: 2, name: "Toshkent shahri", total: 900, submitted: 2 },
-  { id: 3, name: "Toshkent viloyati", total: 500, submitted: 2 },
-  { id: 4, name: "Andijon viloyati", total: 350, submitted: 2 },
-  { id: 5, name: "Buxoro viloyati", total: 350, submitted: 2 },
-  { id: 6, name: "Farg'ona viloyati", total: 400, submitted: 2 },
-  { id: 7, name: "Jizzax viloyati", total: 200, submitted: 2 },
-  { id: 8, name: "Xorazm viloyati", total: 300, submitted: 2 },
-  { id: 9, name: "Namangan viloyati", total: 300, submitted: 2 },
-  { id: 10, name: "Navoiy viloyati", total: 100, submitted: 2 },
-  { id: 11, name: "Qashqadaryo viloyati", total: 350, submitted: 2 },
-  { id: 12, name: "Qoraqalpog'iston Respublikasi", total: 300, submitted: 2 },
-  { id: 13, name: "Samarqand viloyati", total: 450, submitted: 2 },
-  { id: 14, name: "Sirdaryo viloyati", total: 100, submitted: 2 },
-  { id: 15, name: "Surxondaryo viloyati", total: 300, submitted: 2 },
-];
-
-const generateMockData = () => {
-  const names = [
-    "Valiyev Alisher Baxodirovich", "Toshmatov Sardor Olimovich", "Xalimov Rustam", 
-    "Karimova Nargiza", "Umarov Jasur Xasanovich", "Qodirova Madina", 
-    "Azimov Rustam Farxodovich", "Nurmatov Bekzod Akmalovich", "Holimov Botir", "Tashmatov Eshmat"
-  ];
-  return Array.from({ length: 30 }, (_, i) => ({
-    id: i + 1,
-    name: names[i % 10] + (i >= 10 ? ` ${i+1}` : ''),
-    region: regionsList[i % 15], 
-    date: `2024-02-${String((i % 28) + 1).padStart(2, '0')}`,
-    risk: i % 3 === 0 ? 'high' : i % 2 === 0 ? 'medium' : 'low',
-    reason: i % 3 === 0 ? "Qarindoshi rahbarlik lavozimida" : i % 2 === 0 ? "O'zining nomida MCHJ mavjud" : "Xavf aniqlanmadi",
-    details: {
-      personal: { pinfl: `3${String(i+1).padStart(13, '0')}`, passport: `AA${String(i+1).padStart(7, '0')}`, position: "Kredit mutaxassisi" },
-      relatives: [
-        { name: "Eshmatov Toshmat", relation: "Otasi", passport: "AB1234567", pinfl: "31234567890123", noInfo: false, worksAtNbu: i % 4 === 0, nbuBranch: i % 4 === 0 ? "Bosh ofis" : "", nbuPosition: i % 4 === 0 ? "Kredit bo'limi boshlig'i" : "" },
-        { name: "Eshmatova Xalima", relation: "Onasi", passport: "", pinfl: "", noInfo: true, worksAtNbu: false, nbuBranch: "", nbuPosition: "" }
-      ],
-      companies: (() => {
-        let comps = [];
-        if (i % 2 === 0) comps.push({ name: `Biznes Plus MCHJ`, stir: `30${String(i).padStart(7, '1')}`, percent: Math.min((i+1)*5, 100), role: "Ta'sischi", owner: "O'ziga", noDetails: false });
-        if (i % 3 === 0) comps.push({ name: `Qurilish Invest`, stir: `20${String(i).padStart(7, '2')}`, percent: 50, role: "Rahbar", owner: "Qarindoshiga", noDetails: false });
-        if (i % 4 === 0) comps.push({ name: "", stir: "", percent: "", role: "", owner: "O'ziga", noDetails: true });
-        return comps;
-      })(),
-      conflictInfo: i % 3 === 0 ? "Akam NBU tizimida ishlaydi, bevosita bo'ysunuv yo'q." : "",
-      additionalInfo: "",
-      // Tizimga imzo tushishi uchun Mock Signature (kichik PNG chiziq)
-      signature: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADIAAAAiCAYAAAAZqKPLAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAAJcEhZcwAADsMAAA7DAcdvqGQAAABoSURBVFhH7c6xCQAgEATBfSj/nukCnyCDYQaemNl5b9/fT+e/sEE+ZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZIgPZJgH8LwH2f+vU/cAAAAASUVORK5CYII="
-    }
-  }));
-};
-
-const mockDeclarations = generateMockData();
-
-// --- 2. QIDIRUV UCHUN NORMALIZATSIYA ---
-const cyrillicToLatin = (text: string) => {
-  const map: Record<string, string> = {
-    'а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','ё':'yo','ж':'j','з':'z','и':'i','й':'y',
-    'к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f',
-    'х':'x','ц':'ts','ч':'ch','ш':'sh','щ':'sh','ъ':'','ы':'','ь':'','э':'e','ю':'yu','я':'ya',
-    'ў':"o'",'ғ':"g'",'қ':'q','ҳ':'h'
-  };
-  return text.toLowerCase().split('').map(char => map[char] || char).join('');
-};
-
-const normalizeText = (text: string) => {
-  let latin = cyrillicToLatin(text);
-  return latin.replace(/['`‘’]/g, '').replace(/x/g, 'h').replace(/a/g, 'o').replace(/q/g, 'k');    
-};
-
-// --- 3. EXCEL YUKLASH ---
-const downloadExcel = (data: any[][], filename: string, colWidths: number[]) => {
-  const worksheet = XLSX.utils.aoa_to_sheet(data);
-  worksheet['!cols'] = colWidths.map(w => ({ wch: w }));
-
-  const range = XLSX.utils.decode_range(worksheet['!ref'] || "A1");
-  for (let R = range.s.r; R <= range.e.r; ++R) {
-    for (let C = range.s.c; C <= range.e.c; ++C) {
-      const address = XLSX.utils.encode_cell({ c: C, r: R });
-      if (!worksheet[address]) continue;
-      
-      if (R === 0) {
-        worksheet[address].s = {
-          font: { bold: true, color: { rgb: "FFFFFF" } },
-          fill: { fgColor: { rgb: "0A2540" } },
-          alignment: { horizontal: "center", vertical: "center", wrapText: true }
-        };
-      } else {
-        worksheet[address].s = { alignment: { vertical: "top", wrapText: true } };
-      }
-    }
+// Imzoni Base64 dan ArrayBuffer ga o'girish (Wordga rasm qo'yish uchun)
+function base64DataURLToArrayBuffer(dataURL: string) {
+  const base64Regex = /^data:image\/(png|jpg|jpeg|svg|svg\+xml);base64,/;
+  if (!base64Regex.test(dataURL)) return false;
+  const stringBase64 = dataURL.replace(base64Regex, "");
+  let binaryString;
+  if (typeof window !== "undefined") {
+    binaryString = window.atob(stringBase64);
+  } else {
+    binaryString = Buffer.from(stringBase64, "base64").toString("binary");
   }
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Deklaratsiyalar");
-  XLSX.writeFile(workbook, filename);
-};
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
 
 export default function DeclarationsPage() {
-  const [search, setSearch] = useState('');
-  const [regionFilter, setRegionFilter] = useState('Barcha hududlar');
-  const [riskFilter, setRiskFilter] = useState('Barcha holatlar'); 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [selectedDecl, setSelectedDecl] = useState<any>(null);
+  const [users, setUsers] = useState<any[]>([]);
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [allDeclarations, setAllDeclarations] = useState<any[]>([]);
+  
+  const [selectedTab, setSelectedTab] = useState<'yillik' | 'rotatsiya' | 'yangi_xodim'>('yillik');
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
-  const itemsPerPage = 20;
+  const adminName = "Hasan Turaevich";
+  const adminRole = "BKR Boshlig'i";
 
-  const filteredData = useMemo(() => {
-    const normalizedSearch = normalizeText(search);
-    return mockDeclarations.filter(item => {
-      const matchRegion = regionFilter === 'Barcha hududlar' || item.region === regionFilter;
-      const matchSearch = normalizeText(item.name).includes(normalizedSearch);
-      
-      let matchRisk = true;
-      if (riskFilter === 'Yashil hudud') matchRisk = item.risk === 'low';
-      else if (riskFilter === 'Sariq hudud') matchRisk = item.risk === 'medium';
-      else if (riskFilter === 'Qizil hudud') matchRisk = item.risk === 'high';
-      else if (riskFilter === 'Sariq va qizil hududlar') matchRisk = item.risk === 'medium' || item.risk === 'high';
+  useEffect(() => {
+    fetchInitialData();
+  }, []);
 
-      return matchRegion && matchSearch && matchRisk;
-    });
-  }, [search, regionFilter, riskFilter]);
-
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-  const currentData = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
-
-  const handleDownloadDebtors = (regionName: string) => {
-    const excelData = [
-      ["ID", "Xodim F.I.Sh", "Hudud / Filial", "Lavozimi", "Holati"],
-      ["1", "Abdullayev Alisher", regionName === "Barcha hududlar" ? "Bosh ofis" : regionName, "Kredit mutaxassisi", "Topshirmagan"],
-      ["2", "Sodiqova Malika", regionName === "Barcha hududlar" ? "Toshkent shahri" : regionName, "Kassir", "Topshirmagan"],
-      ["3", "Rahmonov Botir", regionName === "Barcha hududlar" ? "Buxoro viloyati" : regionName, "Buxgalter", "Topshirmagan"]
-    ];
-    downloadExcel(excelData, `Qarzdorlar_${regionName.replace(/\s+/g, '_')}.xlsx`, [5, 35, 25, 25, 20]);
-  };
-
-  const handleDownloadFilteredData = () => {
-    const header = [
-      "ID", "XODIM F.I.SH", "SHAXSIY MA'LUMOTLAR (Pasport va JSHSHIR)", "HUDUD / FILIAL", 
-      "TOPSHIRILGAN SANA", "XAVF DARAJASI", "TIZIM XULOSASI (Sabab)", 
-      "YAQIN QARINDOSHLAR HAQIDA MA'LUMOT", "YURIDIK SHAXSLARGA ALOQADORLIK (Kompaniyalar)"
-    ];
-
-    const excelData = [
-      header,
-      ...filteredData.map(item => {
-        const riskLevel = item.risk === 'high' ? '🔴 Qizil (Xavfli)' : item.risk === 'medium' ? '🟡 Sariq (Diqqat)' : '🟢 Yashil (Toza)';
-        const personalData = `Pasport: ${item.details.personal.passport}\nJSHSHIR: ${item.details.personal.pinfl}`;
-        let relativesInfo = "Ma'lumot mavjud emas";
-        if (item.details.relatives && item.details.relatives.length > 0) {
-          relativesInfo = item.details.relatives.map((rel: any, i: number) => {
-            const nbuText = rel.worksAtNbu ? `✅ NBU da ishlaydi (${rel.nbuBranch})` : "❌ NBU da ishlamaydi";
-            return `${i + 1}. ${rel.name} (${rel.relation})\n   ${nbuText}`;
-          }).join("\n\n");
-        }
-        let companyDetailsStr = "Yuridik shaxslar aniqlanmadi";
-        if (item.details.companies && item.details.companies.length > 0) {
-          companyDetailsStr = item.details.companies.map((comp: any, i: number) => {
-            return `${i + 1}. Nomi: "${comp.noDetails ? '—' : comp.name}"\n   STIR: ${comp.noDetails ? '—' : comp.stir}\n   Holati: ${comp.noDetails ? '—' : `${comp.role} (${comp.percent}% ulush)`}\n   Tegishli: ${comp.owner}`;
-          }).join("\n\n");
-        }
-        return [item.id, item.name, personalData, item.region, item.date, riskLevel, item.reason, relativesInfo, companyDetailsStr];
-      })
-    ];
-    downloadExcel(excelData, `Deklaratsiyalar_Baza_${regionFilter.replace(/\s+/g, '_')}.xlsx`, [5, 30, 25, 25, 18, 18, 30, 45, 50]);
-  };
-
-  // --- 4. SHAXSIY DEKLARATSIYANI DOCX FORMATDA YUKLASH (IMZO BILAN) ---
-  const downloadDeclarationDocx = async (decl: any) => {
-    
-    // Imzoni Byte Array ga o'girish (Agar baza yubormasa, default bush chiziq PNG)
-    let signatureBytes;
+  const fetchInitialData = async () => {
+    setIsLoading(true);
     try {
-      const base64Str = (decl.details.signature || "").split(',')[1];
-      const binaryString = window.atob(base64Str);
-      signatureBytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        signatureBytes[i] = binaryString.charCodeAt(i);
+      const resUsers = await fetch('https://nbu-bkr-api.onrender.com/api/auth/users');
+      if (resUsers.ok) setUsers(await resUsers.json());
+
+      const resCamps = await fetch('https://nbu-bkr-api.onrender.com/api/campaigns');
+      if (resCamps.ok) {
+        const campsData = await resCamps.json();
+        setCampaigns(campsData);
+        if (campsData.length > 0) {
+          const activeCamp = campsData.find((c: any) => c.status === 'active');
+          setSelectedCampaignId(activeCamp ? activeCamp._id : campsData[0]._id);
+        }
       }
-    } catch(e) {
-      const fallback = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
-      const binaryString = window.atob(fallback);
-      signatureBytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        signatureBytes[i] = binaryString.charCodeAt(i);
-      }
+
+      const resDecls = await fetch('https://nbu-bkr-api.onrender.com/api/declarations');
+      if (resDecls.ok) setAllDeclarations(await resDecls.json());
+
+    } catch (error) {
+      console.error("Xatolik:", error);
+    } finally {
+      setIsLoading(false);
     }
+  };
 
-    const p = (text: string, bold = false, align: any = "left", size = 24) => new Paragraph({
-      alignment: align, spacing: { line: 360, before: 60, after: 60 },
-      children: [new TextRun({ text, bold, font: "Times New Roman", size })]
+  const filteredDeclarations = allDeclarations.filter(decl => {
+    if (decl.type && decl.type !== selectedTab) return false;
+    if (selectedTab === 'yillik' && selectedCampaignId && decl.campaignId !== selectedCampaignId) return false;
+    if (searchQuery && decl.personalInfo?.fullName) {
+      return decl.personalInfo.fullName.toLowerCase().includes(searchQuery.toLowerCase());
+    }
+    return true;
+  });
+
+  const totalUsers = users.length;
+  const submittedCount = filteredDeclarations.length;
+  const percentage = totalUsers > 0 ? ((submittedCount / totalUsers) * 100).toFixed(1) : '0.0';
+
+  // === EXCEL GENERATSIYASI (Chiroyli dizayn bilan) ===
+  const handleExportExcel = async () => {
+    if (filteredDeclarations.length === 0) return alert("Yuklash uchun ma'lumot yo'q!");
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Deklaratsiyalar", {
+      views: [{ state: 'frozen', xSplit: 2, ySplit: 1 }] // Tepa va yon qatorni qotirib qo'yish
     });
 
-    const createCell = (text: string, bold = false) => new TableCell({
-      children: [new Paragraph({ alignment: "center" as any, children: [new TextRun({ text, bold, font: "Times New Roman", size: 22 })] })],
-      margins: { top: 100, bottom: 100, left: 100, right: 100 },
-      verticalAlign: "center" as any
+    // Ustunlarni sozlash va kengliklarini berish
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 5 },
+      { header: 'XODIM F.I.SH', key: 'fullName', width: 30 },
+      { header: "SHAXSIY MA'LUMOTLAR\n(Pasport va JSHSHIR)", key: 'personal', width: 25 },
+      { header: 'HUDUD / FILIAL', key: 'branch', width: 20 },
+      { header: 'TOPSHIRILGAN SANA', key: 'date', width: 18 },
+      { header: 'XAVF DARAJASI', key: 'risk', width: 20 },
+      { header: 'TIZIM XULOSASI (Sabab)', key: 'riskText', width: 30 },
+      { header: "YAQIN QARINDOSHLAR HAQIDA MA'LUMOT", key: 'relatives', width: 45 },
+      { header: 'YURIDIK SHAXSLARGA ALOQADORLIK (Kompaniyalar)', key: 'companies', width: 50 },
+    ];
+
+    // Header (Sarlavha) qatoriga dizayn berish
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 35;
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF0A2540' } // To'q ko'k rang
+      };
+      cell.font = {
+        color: { argb: 'FFFFFFFF' }, // Oq matn
+        bold: true,
+        size: 10
+      };
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: 'center',
+        wrapText: true
+      };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        left: { style: 'thin', color: { argb: 'FF94A3B8' } },
+        right: { style: 'thin', color: { argb: 'FF94A3B8' } }
+      };
     });
 
-    const borderStyle = { style: "single" as any, size: 1, color: "000000" };
-    const borders = { top: borderStyle, bottom: borderStyle, left: borderStyle, right: borderStyle, insideHorizontal: borderStyle, insideVertical: borderStyle };
+    // Ma'lumotlarni to'ldirish
+    filteredDeclarations.forEach((decl, index) => {
+      let riskLevel = '🟢 Yashil (Toza)';
+      let riskText = 'Xavf aniqlanmadi';
+      
+      if (decl.relatives && decl.relatives.some((r:any) => r.worksAtNBU)) {
+        riskLevel = '🔴 Qizil (Xavfli)'; 
+        riskText = 'Qarindoshi NBU da ishlaydi';
+      } else if (decl.myCompanies && decl.myCompanies.length > 0) {
+        riskLevel = '🟡 Sariq (Diqqat)'; 
+        riskText = "O'zining nomida kompaniya mavjud";
+      }
 
-    const doc = new Document({
-      sections: [{
-        properties: {},
-        children: [
-          p("Эҳтимолий манфаатлар тўқнашуви тўғрисида", true, "center", 28),
-          p("ДЕКЛАРАЦИЯ", true, "center", 28),
-          new Paragraph({ spacing: { before: 200 } }),
-          
-          new Paragraph({
-            alignment: "both" as any, spacing: { line: 360 },
-            children: [
-              new TextRun({ text: "Мен, ", font: "Times New Roman", size: 24 }),
-              new TextRun({ text: decl.name, bold: true, font: "Times New Roman", size: 24 }),
-              new TextRun({ text: ` (${decl.region}, ${decl.details.personal.position}) `, font: "Times New Roman", size: 24 }),
-              new TextRun({ text: "ушбу тўлдираётган декларацияда ўзим ва менга алоқадор шахсларнинг эҳтимолий манфаатлар тўқнашувига оид қуйидаги маълумотларни ошкор қиламан:", font: "Times New Roman", size: 24 }),
-            ]
-          }),
-          new Paragraph({ spacing: { before: 200 } }),
+      const relsStr = decl.relatives?.length > 0
+        ? decl.relatives.map((r:any, i:number) => `${i+1}. ${r.fullName} (${r.relationship})\n   ${r.worksAtNBU ? '☑ NBU da ishlaydi ('+r.nbuBranch+')' : '☒ NBU da ishlamaydi'}`).join('\n\n')
+        : 'Qarindoshlar kiritilmagan';
 
-          p("1. Ходимга оид маълумотлар", true, "left", 24),
-          new Table({
-            width: { size: 100, type: "pct" as any }, borders,
-            rows: [
-              new TableRow({ children: [createCell("Идентификация ID-картаси ёки биометрик паспорт маълумотлари (серияси, рақами, берилган санаси)", true), createCell("Жисмоний шахснинг шахсий идентификация рақами (ЖШШИР) (мавжуд бўлган тақдирда)", true)] }),
-              new TableRow({ children: [createCell(decl.details.personal.passport || '—'), createCell(decl.details.personal.pinfl || '—')] })
-            ]
-          }),
+      const myComps = decl.myCompanies?.map((c:any, i:number) => `${i+1}. Nomi: "${c.companyName}"\nSTIR: ${c.stir}\nHolati: ${c.roleInCompany} (${c.sharePercent}% ulush)\nTegishli: O'ziga`) || [];
+      const relComps = decl.relativeCompanies?.map((c:any, i:number) => `${myComps.length + i + 1}. Nomi: "${c.companyName}"\nSTIR: ${c.stir}\nHolati: ${c.roleInCompany} (${c.sharePercent}% ulush)\nTegishli: Qarindoshiga (${c.relativeName})`) || [];
+      const allCompsStr = [...myComps, ...relComps].join('\n\n') || 'Yuridik shaxslar aniqlanmadi';
 
-          new Paragraph({ spacing: { before: 200 } }),
-          p("2. Алоқадор шахсга оид маълумотлар*", true, "left", 24),
-          new Table({
-            width: { size: 100, type: "pct" as any }, borders,
-            rows: [
-              new TableRow({ children: [createCell("Қариндошлик даражаси", true), createCell("Фамилияси, исми, отасининг исми", true), createCell("Паспорт маълумотлари", true), createCell("ЖШШИР", true), createCell("НБУ тизимида ишлайдими (филиал ва лавозим)?", true)] }),
-              ...decl.details.relatives.map((rel: any) => new TableRow({
-                children: [
-                  createCell(rel.relation),
-                  createCell(rel.name),
-                  createCell(rel.noInfo ? '—' : (rel.passport || '—')),
-                  createCell(rel.noInfo ? '—' : (rel.pinfl || '—')),
-                  createCell(rel.worksAtNbu ? `Ҳа (${rel.nbuBranch}, ${rel.nbuPosition})` : "Йўқ")
-                ]
-              }))
-            ]
-          }),
+      const row = worksheet.addRow({
+        id: index + 1,
+        fullName: decl.personalInfo?.fullName || "-",
+        personal: `Pasport: ${decl.personalInfo?.passport || "-"}\nJSHSHIR: ${decl.personalInfo?.pinfl || "-"}`,
+        branch: decl.personalInfo?.branch || "-",
+        date: new Date(decl.createdAt).toLocaleDateString('uz-UZ'),
+        risk: riskLevel,
+        riskText: riskText,
+        relatives: relsStr,
+        companies: allCompsStr
+      });
 
-          new Paragraph({ spacing: { before: 200 } }),
-          p("Ходим ёки унинг яқин қариндоши қайси юридик шахснинг устав фонди (устав капитали) акцияларига ёки улушларига эгалик қилса ёхуд унда бошқарув органининг раҳбари ёки аъзоси бўлса, ўша юридик шахсга оид маълумотлар:", true, "left", 22),
-          new Table({
-            width: { size: 100, type: "pct" as any }, borders,
-            rows: [
-              new TableRow({ children: [createCell("Тегишли", true), createCell("Юридик шахснинг номи", true), createCell("СТИР", true), createCell("Бошқарув органининг раҳбари ёки аъзосимисиз?", true), createCell("Акцияларига ёки улушларига эгалик қиласизми (фоизда)?", true)] }),
-              ...decl.details.companies.map((comp: any) => new TableRow({
-                children: [
-                  createCell(comp.owner),
-                  createCell(comp.noDetails ? '—' : comp.name),
-                  createCell(comp.noDetails ? '—' : comp.stir),
-                  createCell(comp.noDetails ? '—' : comp.role),
-                  createCell(comp.noDetails ? '—' : `${comp.percent}%`)
-                ]
-              }))
-            ]
-          }),
-
-          new Paragraph({ spacing: { before: 200 } }),
-          p("3. Эҳтимолий манфаатлар тўқнашуви тўғрисидаги маълумот", true, "left", 24),
-          p(decl.details.conflictInfo || "—"),
-
-          new Paragraph({ spacing: { before: 200 } }),
-          p("4. Эҳтимолий манфаатлар тўқнашуви тўғрисидаги декларацияда кўрсатилиши керак бўлган маълумотлардан ташқари қўшимча маълумотлар (агар мавжуд бўлса)", true, "left", 24),
-          p(decl.details.additionalInfo || "—"),
-
-          new Paragraph({ spacing: { before: 400 } }),
-          p("*Ходим унга алоқадор шахсларнинг идентификация ID-картаси, ЖШШИР, СТИР бўйича маълумотларни олиш имкониятига эга бўлмаса, у томонидан тегишли позицияларда 'маълумотга эга эмасман' деб изоҳ кўрсатилиши мумкин.", false, "both", 18),
-          
-          new Paragraph({ spacing: { before: 400 } }),
-          
-          // --- XODIMNING IMZOSI VA SANASI ---
-          new Paragraph({
-            alignment: "right" as any,
-            children: [
-              new TextRun({ text: "Ходимнинг Ф.И.О.  ", font: "Times New Roman", size: 24 }),
-              new TextRun({ text: decl.name, bold: true, underline: { type: "single" as any }, font: "Times New Roman", size: 24 }),
-              new TextRun({ text: "      имзо  ", font: "Times New Roman", size: 24 }),
-              new ImageRun({ data: signatureBytes, type: "png", transformation: { width: 100, height: 35 } } as any),
-              new TextRun({ text: "      сана  ", font: "Times New Roman", size: 24 }),
-              new TextRun({ text: decl.date, bold: true, underline: { type: "single" as any }, font: "Times New Roman", size: 24 })
-            ]
-          })
-        ]
-      }]
+      // Har bir data katagiga dizayn (wrapText) berish
+      row.eachCell((cell) => {
+        cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+        cell.border = {
+          top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          left: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+          right: { style: 'thin', color: { argb: 'FFCBD5E1' } }
+        };
+      });
     });
 
-    const blob = await Packer.toBlob(doc);
-    saveAs(blob, `Deklaratsiya_${decl.name.replace(/\s+/g, '_')}.docx`);
+    // Faylni generatsiya qilib yuklash
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, "Deklaratsiyalar_Reyestri.xlsx");
+  };
+
+  // === DOCX GENERATSIYASI ===
+  const handleDownloadDocx = async (decl: any) => {
+    try {
+      const response = await fetch('/template.docx');
+      if (!response.ok) {
+        alert("template.docx fayli public papkada topilmadi!");
+        return;
+      }
+      const content = await response.arrayBuffer();
+      const zip = new PizZip(content);
+
+      const imageOptions = {
+        centered: true,
+        getImage: function(tagValue: any) {
+          return base64DataURLToArrayBuffer(tagValue);
+        },
+        getSize: function() {
+          return [140, 45]; 
+        }
+      };
+      const imageModule = new ImageModule(imageOptions);
+
+      const doc = new Docxtemplater(zip, {
+        paragraphLoop: true,
+        linebreaks: true,
+        modules: [imageModule]
+      });
+
+      const typeMap: any = {
+        'yillik': 'йиллик',
+        'rotatsiya': 'бошқа ишга ўтказилаётганда',
+        'yangi_xodim': 'ишга қабул қилинаётганда'
+      };
+      const declType = decl.type ? typeMap[decl.type] : 'йиллик';
+
+      const relativesData = decl.relatives?.length > 0 
+        ? decl.relatives.map((r: any) => ({
+            relName: r.fullName || "-",
+            relRel: r.relationship || "-",
+            relPass: r.noInfo ? "Маълумотга эга эмасман" : `${r.passport || '-'} (${r.passportDate || ''})`,
+            relPinfl: r.noInfo ? "Маълумотга эга эмасман" : (r.pinfl || "-")
+        }))
+        : [{ relName: "-", relRel: "-", relPass: "-", relPinfl: "-" }];
+
+      const myCompsData = decl.myCompanies?.length > 0
+        ? decl.myCompanies.map((c: any) => ({
+            compName: c.companyName || "-",
+            compStir: c.stir || "-"
+        }))
+        : [{ compName: "-", compStir: "-" }];
+
+      const relCompsData = decl.relativeCompanies?.length > 0
+        ? decl.relativeCompanies.map((c: any) => ({
+            relName: c.relativeName || "-",
+            compName: c.companyName || "-",
+            compStir: c.stir || "-"
+        }))
+        : [{ relName: "-", compName: "-", compStir: "-" }];
+
+      const fallbackImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+
+      const data = {
+        declType: declType,
+        fullName: decl.personalInfo?.fullName || "-",
+        branch: decl.personalInfo?.branch || "-",
+        position: decl.personalInfo?.position || "-",
+        passport: decl.personalInfo?.passport || "-",
+        passportDate: decl.personalInfo?.passportDate || "-",
+        pinfl: decl.personalInfo?.pinfl || "-",
+        
+        relatives: relativesData,
+        myComps: myCompsData,
+        relComps: relCompsData,
+
+        conflictInfo: decl.conflictInfo || "-",
+        additionalInfo: decl.additionalInfo || "-",
+        date: new Date(decl.createdAt).toLocaleDateString('uz-UZ').replace(/\//g, '.'),
+        signature: decl.signature || fallbackImage,
+      };
+
+      doc.render(data);
+
+      const out = doc.getZip().generate({
+        type: "blob",
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      });
+      saveAs(out, `${decl.personalInfo?.fullName || 'Xodim'}_deklaratsiya.docx`);
+
+    } catch (error) {
+      console.error("DOCX xato:", error);
+      alert("DOCX yaratishda xato yuz berdi!");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9] flex font-sans">
+    <div className="min-h-screen bg-[#F1F5F9] flex font-sans relative">
       
-      {/* MODAL (Xodim deklaratsiyasini ko'rish) */}
-      {selectedDecl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95">
-            
-            {/* Modal Header */}
-            <div className="flex justify-between items-center p-6 border-b border-slate-200">
-              <div>
-                <h2 className="text-xl font-bold text-slate-800">{selectedDecl.name}</h2>
-                <p className="text-sm text-slate-500">{selectedDecl.region} | Topshirilgan: {selectedDecl.date}</p>
-              </div>
-              <div className="flex items-center gap-3">
-                <button 
-                  onClick={() => downloadDeclarationDocx(selectedDecl)}
-                  className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm"
-                >
-                  <Download className="w-4 h-4" /> Deklaratsiyani yuklash
-                </button>
-                <button onClick={() => setSelectedDecl(null)} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            
-            {/* Modal Body */}
-            <div className="p-6 overflow-y-auto space-y-8 bg-slate-50">
-              
-              {/* Shaxsiy ma'lumotlar */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><User className="w-4 h-4"/> Shaxsiy ma'lumotlar</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">Pasport</p>
-                    <p className="font-semibold text-slate-800">{selectedDecl.details.personal.passport || '—'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-slate-500 mb-1">JSHSHIR</p>
-                    <p className="font-semibold text-slate-800">{selectedDecl.details.personal.pinfl || '—'}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Qarindoshlar */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><Users className="w-4 h-4"/> Yaqin qarindoshlari</h3>
-                <div className="space-y-3">
-                  {selectedDecl.details.relatives.map((rel: any, i: number) => (
-                    <div key={i} className="p-4 bg-slate-50 rounded-lg border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
-                      <div>
-                        <p className="font-bold text-slate-800 text-sm">{rel.name}</p>
-                        <p className="text-xs text-slate-500 mb-1">{rel.relation}</p>
-                        <p className="text-[11px] font-mono text-slate-400">
-                          ID/JSHSHIR: <span className="font-semibold text-slate-600">{rel.noInfo ? '— / —' : `${rel.passport || '—'} / ${rel.pinfl || '—'}`}</span>
-                        </p>
-                      </div>
-                      <div className="md:text-right">
-                        {rel.worksAtNbu ? (
-                          <span className="bg-amber-100 text-amber-800 text-[10px] font-bold px-2.5 py-1.5 rounded-md flex flex-col items-center gap-0.5">
-                            NBU xodimi 
-                            <span className="font-medium text-amber-600">({rel.nbuBranch}, {rel.nbuPosition})</span>
-                          </span>
-                        ) : (
-                          <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-2.5 py-1 rounded">NBU da ishlamaydi</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Yuridik shaxslar */}
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"><Building className="w-4 h-4"/> Aloqador yuridik shaxslar</h3>
-                {selectedDecl.details.companies.length > 0 ? (
-                  <div className="space-y-3">
-                    {selectedDecl.details.companies.map((comp: any, i: number) => (
-                      <div key={i} className="p-4 bg-slate-50 rounded-lg border border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                        <div>
-                          <p className="text-xs text-slate-500 mb-0.5">Kompaniya nomi / STIR</p>
-                          <p className="font-bold text-slate-800 text-sm">{comp.noDetails ? '—' : comp.name}</p>
-                          <p className="font-mono text-xs text-slate-500">{comp.noDetails ? '—' : comp.stir}</p>
-                        </div>
-                        <div className="md:text-right">
-                          <p className="text-xs text-slate-500 mb-0.5">Holati</p>
-                          <span className={`inline-block text-[11px] font-bold px-2.5 py-1 rounded ${comp.noDetails ? 'bg-slate-200 text-slate-600' : 'bg-blue-100 text-blue-700'}`}>
-                            {comp.noDetails ? '—' : `${comp.role} (${comp.percent}% ulush)`}
-                          </span>
-                          <p className="text-[10px] text-slate-400 mt-1 uppercase tracking-wider">{comp.owner} tegishli</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-slate-500 italic">Yuridik shaxslar aniqlanmadi.</p>
-                )}
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* SIDEBAR */}
       <aside className="w-64 bg-[#0A2540] text-slate-300 flex flex-col hidden md:flex fixed h-full z-20">
         <div className="h-16 flex items-center px-6 bg-[#071d33] border-b border-slate-700/50">
           <div className="w-8 h-8 bg-white rounded flex items-center justify-center text-[#0A2540] font-bold text-xs mr-3 shadow-sm">NBU</div>
           <span className="text-white font-semibold tracking-wide">BKR Admin</span>
         </div>
-        
         <nav className="flex-1 py-6 px-4 space-y-1.5 overflow-y-auto">
           <Link href="/admin" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <LayoutDashboard className="w-5 h-5" /> Dashboard
@@ -451,14 +312,6 @@ export default function DeclarationsPage() {
             <FileBarChart className="w-5 h-5" /> Hisobotlar
           </Link>
         </nav>
-        <div className="p-4 border-t border-slate-700/50">
-        <Link href="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors mb-2">
-            <Settings className="w-5 h-5" /> Sozlamalar
-          </Link>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
-            <LogOut className="w-5 h-5" /> Chiqish
-          </button>
-        </div>
       </aside>
 
       {/* MAIN CONTENT */}
@@ -467,210 +320,162 @@ export default function DeclarationsPage() {
         {/* Top Header */}
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 sticky top-0 z-10 shadow-sm">
           <h1 className="text-xl font-bold text-slate-800">Deklaratsiyalar reyestri</h1>
-          <div className="flex items-center gap-3 text-sm text-slate-600">
+          <div className="flex items-center gap-4">
             <div className="text-right">
-              <p className="font-semibold text-slate-900">Rustamov Otabek</p>
-              <p className="text-[10px] text-slate-500 uppercase tracking-wider">BKR Bosh mutaxassis</p>
-            </div>
-            <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center">
-              <User className="w-5 h-5 text-slate-500" />
+              <p className="font-bold text-slate-900">{adminName}</p>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{adminRole}</p>
             </div>
           </div>
         </header>
 
-        {/* Content Body */}
-        <div className="flex-1 p-6 md:p-8">
+        <div className="flex-1 p-8">
           
-          {/* STATS & PROGRESS SECTION */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
-            
-            {/* Jami Topshirilgan Blok (30 / 6100) */}
-            <div className="bg-white rounded-2xl p-8 border border-blue-100 shadow-sm flex flex-col justify-center relative overflow-hidden xl:col-span-1">
-              <div className="absolute right-0 top-0 w-32 h-32 bg-blue-50 rounded-bl-full -mr-10 -mt-10"></div>
-              <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 relative z-10">Jami topshirilgan</p>
-              <h3 className="text-4xl font-black text-[#0A2540] relative z-10">30 <span className="text-xl font-semibold text-slate-400">/ 6,100</span></h3>
-              <p className="text-sm text-blue-600 font-medium mt-4 relative z-10 flex items-center gap-2">
-                <FileText className="w-4 h-4"/> Umumiy jarayon: {((30/6100) * 100).toFixed(1)}%
-              </p>
-            </div>
-
-            {/* Hududlar bo'yicha progress va Excel download */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 xl:col-span-2 flex flex-col h-[180px]">
-              <h2 className="text-base font-bold text-slate-800 mb-4 flex items-center justify-between">
-                Hududlar kesimida (6100 ta xodim)
-                <button onClick={() => handleDownloadDebtors("Barcha hududlar")} className="text-xs flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-3 py-1.5 rounded-lg hover:bg-emerald-100 transition-colors">
-                  <Download className="w-3.5 h-3.5"/> Barcha qarzdorlarni yuklash
-                </button>
-              </h2>
-              
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                {progressData.map((item) => {
-                  const percent = (item.submitted / item.total) * 100;
-                  const displayPercent = percent < 1 ? percent.toFixed(1) : Math.round(percent);
-                  // Ko'zga ko'rinishi uchun progressni minimum 1.5% qilib ko'rsatamiz
-                  const barWidth = Math.max(1.5, percent);
-                  const barColor = item.submitted >= item.total * 0.9 ? 'bg-emerald-500' : item.submitted >= item.total * 0.7 ? 'bg-blue-500' : 'bg-red-500';
-                  
-                  return (
-                    <div key={item.id} className="relative group">
-                      <div className="flex justify-between items-end mb-1">
-                        <span className="text-xs font-bold text-slate-700">{item.name}</span>
-                        <div className="text-right flex items-center gap-1">
-                          <span className="text-[11px] font-bold text-slate-900">{item.submitted}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">/{item.total} kishi</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden relative">
-                          <div className={`h-full rounded-full transition-all duration-1000 ${barColor}`} style={{ width: `${barWidth}%` }}></div>
-                        </div>
-                        <span className="text-[10px] font-bold text-slate-400 min-w-[30px]">{displayPercent}%</span>
-                        <button 
-                          onClick={() => handleDownloadDebtors(item.name)}
-                          title={`${item.name} qarzdorlarini yuklash`}
-                          className="text-slate-400 hover:text-emerald-600 transition-colors p-1"
-                        >
-                          <FileSpreadsheet className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+          {/* TABLAR */}
+          <div className="flex gap-4 mb-6">
+            <button 
+              onClick={() => setSelectedTab('yillik')} 
+              className={`px-5 py-2.5 rounded-lg font-bold transition-all ${selectedTab === 'yillik' ? 'bg-[#0A2540] text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+            >
+              Yillik deklaratsiya
+            </button>
+            <button 
+              onClick={() => setSelectedTab('rotatsiya')} 
+              className={`px-5 py-2.5 rounded-lg font-bold transition-all ${selectedTab === 'rotatsiya' ? 'bg-[#0A2540] text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+            >
+              Rotatsiya
+            </button>
+            <button 
+              onClick={() => setSelectedTab('yangi_xodim')} 
+              className={`px-5 py-2.5 rounded-lg font-bold transition-all ${selectedTab === 'yangi_xodim' ? 'bg-[#0A2540] text-white shadow-md' : 'bg-white text-slate-600 hover:bg-slate-100 border border-slate-200'}`}
+            >
+              Yangi ishga qabul
+            </button>
           </div>
 
-          {/* TABLE SECTION */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
-            
-            {/* Toolbar (Qidiruv + Hudud + Risk Filtri + Excel yuklash asosiysi) */}
-            <div className="p-5 border-b border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
-              
-              <div className="flex flex-col md:flex-row gap-4 flex-1 w-full">
-                
-                {/* Qidiruv */}
-                <div className="relative md:flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input 
-                    type="text" 
-                    value={search}
-                    onChange={(e) => {setSearch(e.target.value); setCurrentPage(1);}}
-                    placeholder="F.I.Sh orqali aqlli qidiruv (Krill/Lotin)..." 
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-blue-600 bg-white transition-colors" 
-                  />
-                </div>
-                
-                {/* Hudud Filtr */}
-                <div className="relative sm:w-48 md:w-56">
-                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <select 
-                    value={regionFilter}
-                    onChange={(e) => {setRegionFilter(e.target.value); setCurrentPage(1);}}
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 outline-none focus:border-blue-600 appearance-none bg-white font-medium cursor-pointer"
-                  >
-                    <option value="Barcha hududlar">Barcha hududlar</option>
-                    {regionsList.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-
-                {/* XAVF DARAJASI BO'YICHA FILTR */}
-                <div className="relative sm:w-48 md:w-56">
-                  <Activity className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <select 
-                    value={riskFilter}
-                    onChange={(e) => {setRiskFilter(e.target.value); setCurrentPage(1);}}
-                    className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm text-slate-900 outline-none focus:border-blue-600 appearance-none bg-white font-medium cursor-pointer"
-                  >
-                    <option value="Barcha holatlar">Barcha holatlar</option>
-                    <option value="Yashil hudud">Yashil hudud (Toza)</option>
-                    <option value="Sariq hudud">Sariq hudud (Diqqat)</option>
-                    <option value="Qizil hudud">Qizil hudud (Xavfli)</option>
-                    <option value="Sariq va qizil hududlar">Sariq va qizil hududlar</option>
-                  </select>
-                </div>
-
+          {/* STATISTIKA VA MUDDAT TANLASH */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm relative overflow-hidden flex flex-col justify-center">
+              <div className="absolute top-0 right-0 -mt-10 -mr-10 w-40 h-40 bg-blue-50 rounded-full blur-2xl"></div>
+              <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-2 z-10">Jami Topshirilgan</p>
+              <div className="flex items-end gap-2 z-10">
+                <h2 className="text-5xl font-black text-[#0A2540]">{submittedCount}</h2>
+                <p className="text-xl font-bold text-slate-400 mb-1">/ {totalUsers}</p>
               </div>
-              
-              {/* ASOSIY JADVALNI YUKLASH (EXCEL) TUGMASI */}
+              <div className="mt-4 flex items-center gap-2 text-sm font-bold text-blue-600 z-10">
+                <FileText className="w-4 h-4" /> Umumiy jarayon: {percentage}%
+              </div>
+            </div>
+
+            {selectedTab === 'yillik' ? (
+              <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center">
+                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Muddatlar kesimida statistika</h3>
+                {campaigns.length > 0 ? (
+                  <select 
+                    value={selectedCampaignId}
+                    onChange={(e) => setSelectedCampaignId(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-blue-100 rounded-xl focus:border-blue-600 outline-none text-slate-800 font-bold appearance-none bg-blue-50/30 cursor-pointer"
+                  >
+                    {campaigns.map((camp: any) => (
+                      <option key={camp._id} value={camp._id}>
+                        {camp.title} [{new Date(camp.startDate).toLocaleDateString('uz-UZ')} — {new Date(camp.endDate).toLocaleDateString('uz-UZ')}] {camp.status === 'active' ? '(FAOL)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <div className="text-amber-600 font-bold text-sm bg-amber-50 p-3 rounded-lg border border-amber-200">
+                    Hali tizimda hech qanday Yillik muddat ochilmagan.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="lg:col-span-2 bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center text-slate-500">
+                <Calendar className="w-8 h-8 mb-2 opacity-50" />
+                <p className="font-medium text-sm text-center">Ushbu toifadagi deklaratsiyalar uchun qat'iy muddat yo'q.<br/> Xodim tomonidan vaziyatga qarab to'ldiriladi.</p>
+              </div>
+            )}
+          </div>
+
+          {/* JADVAL */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50/50">
+              <div className="relative w-full sm:w-96">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Xodim Ismi orqali qidiruv..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-blue-600 text-sm font-medium"
+                />
+              </div>
               <button 
-                onClick={handleDownloadFilteredData}
-                className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors whitespace-nowrap w-full md:w-auto shadow-sm"
+                onClick={handleExportExcel}
+                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm whitespace-nowrap w-full sm:w-auto justify-center"
               >
                 <Download className="w-4 h-4" /> Excel yuklab olish
               </button>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto min-h-[400px]">
+            <div className="overflow-x-auto">
               <table className="w-full text-left text-sm text-slate-600">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-slate-100 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
                   <tr>
-                    <th className="px-6 py-4 font-semibold text-slate-500 w-16">#</th>
-                    <th className="px-6 py-4 font-semibold text-slate-500">Xodim F.I.Sh</th>
-                    <th className="px-6 py-4 font-semibold text-slate-500">Hudud / Filial</th>
-                    <th className="px-6 py-4 font-semibold text-slate-500">Topshirilgan sana</th>
-                    <th className="px-6 py-4 font-semibold text-slate-500">Tizim xulosasi (Xavf)</th>
-                    <th className="px-6 py-4 font-semibold text-slate-500 text-right">Harakatlar</th>
+                    <th className="px-6 py-4">Xodim F.I.Sh</th>
+                    <th className="px-6 py-4">Hudud / Filial</th>
+                    <th className="px-6 py-4">Topshirilgan sana</th>
+                    <th className="px-6 py-4 text-center">Xavf (Tizim xulosasi)</th>
+                    <th className="px-6 py-4 text-right">Harakatlar</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {currentData.length > 0 ? currentData.map((item, index) => (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="px-6 py-4 text-slate-400 font-medium">{(currentPage - 1) * itemsPerPage + index + 1}</td>
-                      <td className="px-6 py-4 font-bold text-[#0A2540]">{item.name}</td>
-                      <td className="px-6 py-4 text-slate-700 font-medium">{item.region}</td>
-                      <td className="px-6 py-4 text-slate-500">{item.date}</td>
-                      <td className="px-6 py-4">
-                        {item.risk === 'high' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-red-50 text-red-700 border border-red-100"><span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse"></span> Qizil hudud</span>}
-                        {item.risk === 'medium' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-amber-50 text-amber-700 border border-amber-100"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> Sariq hudud</span>}
-                        {item.risk === 'low' && <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-100"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Toza</span>}
-                        <p className="text-[11px] text-slate-500 mt-1.5">{item.reason}</p>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => setSelectedDecl(item)}
-                          className="text-blue-600 font-bold hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg flex items-center gap-1.5 ml-auto text-xs transition-colors"
-                        >
-                          <Eye className="w-4 h-4" /> Ko'rish
-                        </button>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500">
-                        Qidiruv natijalariga mos ma'lumot topilmadi.
-                      </td>
-                    </tr>
+                <tbody className="divide-y divide-slate-200">
+                  {isLoading ? (
+                    <tr><td colSpan={5} className="p-8 text-center font-bold text-slate-400">Yuklanmoqda...</td></tr>
+                  ) : filteredDeclarations.length > 0 ? (
+                    filteredDeclarations.map((decl: any) => {
+                      let riskLevel = 'yashil';
+                      let riskText = 'Xavf aniqlanmadi';
+                      if (decl.relatives && decl.relatives.some((r:any) => r.worksAtNBU)) {
+                        riskLevel = 'qizil'; riskText = 'Qarindoshi NBU da ishlaydi';
+                      } else if (decl.myCompanies && decl.myCompanies.length > 0) {
+                        riskLevel = 'sariq'; riskText = "O'zining nomida kompaniya mavjud";
+                      }
+
+                      return (
+                        <tr key={decl._id} className="hover:bg-slate-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-[#0A2540]">{decl.personalInfo?.fullName || 'Noma\'lum'}</p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{decl.userEmail}</p>
+                          </td>
+                          <td className="px-6 py-4 font-medium text-slate-700">{decl.personalInfo?.branch || '-'}</td>
+                          <td className="px-6 py-4 font-bold text-slate-600">{new Date(decl.createdAt).toLocaleDateString('uz-UZ')}</td>
+                          <td className="px-6 py-4">
+                            <div className="flex flex-col items-center">
+                              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase flex items-center gap-1.5 ${riskLevel === 'qizil' ? 'bg-red-100 text-red-700' : riskLevel === 'sariq' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                <span className={`w-2 h-2 rounded-full ${riskLevel === 'qizil' ? 'bg-red-500' : riskLevel === 'sariq' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                {riskLevel === 'qizil' ? 'Qizil hudud' : riskLevel === 'sariq' ? 'Sariq hudud' : 'Toza'}
+                              </span>
+                              <span className="text-[10px] text-slate-400 mt-1">{riskText}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button 
+                              onClick={() => handleDownloadDocx(decl)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg font-bold transition-colors text-xs border border-blue-200"
+                            >
+                              <Download className="w-3.5 h-3.5" /> DOCX formatda
+                            </button>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  ) : (
+                    <tr><td colSpan={5} className="p-12 text-center font-bold text-slate-400">Ma'lumot topilmadi.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between bg-slate-50 rounded-b-xl">
-                <span className="text-sm text-slate-500 font-medium">Jami {filteredData.length} tadan {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredData.length)} ko'rsatilmoqda</span>
-                <div className="flex items-center gap-2">
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="p-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-white disabled:opacity-50 transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <span className="text-sm font-bold text-slate-700 px-2">{currentPage} / {totalPages}</span>
-                  <button 
-                    onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="p-1.5 rounded-lg border border-slate-300 text-slate-600 hover:bg-white disabled:opacity-50 transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-            
           </div>
+          
         </div>
       </main>
     </div>

@@ -14,7 +14,13 @@ export default function DeclarationPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [isAutofilled, setIsAutofilled] = useState(false);
-  const [isLoading, setIsLoading] = useState(false); // Yuborilayotgan holat uchun
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const [userEmail, setUserEmail] = useState('');
+  
+  // YANGI: Deklaratsiya turi va Kampaniya ID si uchun
+  const [declType, setDeclType] = useState('yillik');
+  const [campaignId, setCampaignId] = useState('');
 
   // === IMZO (SIGNATURE) UCHUN STATE VA REF ===
   const signatureCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -24,19 +30,9 @@ export default function DeclarationPage() {
   // Deklaratsiya Form State
   const [formData, setFormData] = useState({
     personal: { fullName: '', branch: '', position: '', passport: '', passportDate: '', pinfl: '' },
-    relatives: [{ 
-      relationship: '', 
-      fullName: '', 
-      passport: '', 
-      passportDate: '',
-      pinfl: '', 
-      noInfo: false,
-      worksAtNBU: false,
-      nbuBranch: '',
-      nbuPosition: ''
-    }],
-    myCompanies: [{ companyName: '', stir: '', isLeader: '', roleInCompany: '', sharePercent: '', noDetails: false }],
-    relativeCompanies: [{ relativeName: '', companyName: '', stir: '', isLeader: '', roleInCompany: '', sharePercent: '', noDetails: false }],
+    relatives: [] as any[], 
+    myCompanies: [] as any[],
+    relativeCompanies: [] as any[],
     conflictInfo: '',
     additionalInfo: ''
   });
@@ -48,7 +44,6 @@ export default function DeclarationPage() {
     { id: 4, name: 'Tasdiqlash', icon: AlertTriangle },
   ];
 
-  // Qarindoshlik darajalari
   const relationshipOptions = [
     "Otasi", "Onasi", "Turmush o'rtog'i", "Akasi", "Ukasi", 
     "Opasi", "Singlisi", "O'g'li", "Qizi", "Bobosi", "Buvisi"
@@ -57,6 +52,32 @@ export default function DeclarationPage() {
   const passportRegex = /^[a-zA-Z]{2}\d{7}$/;
   const pinflRegex = /^\d{14}$/;
   const stirRegex = /^\d{9}$/;
+
+  // Tizimga kirgan xodimning emailini olish va Turini aniqlash
+  useEffect(() => {
+    // 1. Emailni olish
+    const userInfoString = localStorage.getItem('user_info');
+    if (userInfoString) {
+      const parsedUser = JSON.parse(userInfoString);
+      setUserEmail(parsedUser.email || '');
+    }
+
+    // 2. URL dan turni aniqlash (?type=rotatsiya)
+    const params = new URLSearchParams(window.location.search);
+    const urlType = params.get('type') || 'yillik';
+    setDeclType(urlType);
+
+    // 3. Agar 'yillik' bo'lsa, Faol kampaniya (Muddat) ID sini Backenddan tortib olish
+    if (urlType === 'yillik') {
+      fetch('https://nbu-bkr-api.onrender.com/api/campaigns')
+        .then(res => res.json())
+        .then(data => {
+          const active = data.find((c: any) => c.status === 'active');
+          if (active) setCampaignId(active._id);
+        })
+        .catch(err => console.error("Kampaniya topilmadi:", err));
+    }
+  }, []);
 
   // === IMZO FUNKSIYALARI ===
   useEffect(() => {
@@ -67,7 +88,7 @@ export default function DeclarationPage() {
         ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-        ctx.strokeStyle = '#0A2540'; // To'q ko'k ruchka
+        ctx.strokeStyle = '#0A2540';
       }
     }
   }, [currentStep]);
@@ -76,19 +97,12 @@ export default function DeclarationPage() {
     const canvas = signatureCanvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    
     if (e.type.includes('touch')) {
       const touch = (e as React.TouchEvent).touches[0];
-      return {
-        x: touch.clientX - rect.left,
-        y: touch.clientY - rect.top
-      };
+      return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
     } else {
       const mouse = e as React.MouseEvent;
-      return {
-        x: mouse.clientX - rect.left,
-        y: mouse.clientY - rect.top
-      };
+      return { x: mouse.clientX - rect.left, y: mouse.clientY - rect.top };
     }
   };
 
@@ -180,18 +194,67 @@ export default function DeclarationPage() {
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleAutofill = async () => {
+    if (!userEmail) return;
+    try {
+      const res = await fetch(`https://nbu-bkr-api.onrender.com/api/declarations/my?email=${userEmail}`);
+      if (res.status === 404) {
+        alert("Siz avval deklaratsiya to'ldirmagansiz!");
+        return;
+      }
+      const data = await res.json();
+      if (res.ok) {
+        setFormData({
+          personal: data.personalInfo || formData.personal,
+          relatives: data.relatives || [],
+          myCompanies: data.myCompanies || [],
+          relativeCompanies: data.relativeCompanies || [],
+          conflictInfo: data.conflictInfo || '',
+          additionalInfo: data.additionalInfo || ''
+        });
+        setIsAutofilled(true);
+        alert("Oldingi ma'lumotlaringiz muvaffaqiyatli yuklandi!");
+      }
+    } catch (error) {
+      console.error("Ma'lumotlarni yuklashda xatolik:", error);
+    }
+  };
+
+  // === MA'LUMOTLARNI BAZAGA SAQLASH (POST) ===
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (validateStep() && hasSignature) {
       setIsLoading(true);
-      // Imzoni Base64 formatda olish
       const signatureImage = signatureCanvasRef.current?.toDataURL('image/png');
       
-      setTimeout(() => {
-        console.log("Yuborilayotgan ma'lumotlar: ", { ...formData, signature: signatureImage });
+      try {
+        const res = await fetch('https://nbu-bkr-api.onrender.com/api/declarations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: declType,                  // QO'SHILDI: Deklaratsiya turi
+            campaignId: campaignId || null,  // QO'SHILDI: Kampaniya ID si
+            userEmail,
+            personalInfo: formData.personal,
+            relatives: formData.relatives,
+            myCompanies: formData.myCompanies,
+            relativeCompanies: formData.relativeCompanies,
+            conflictInfo: formData.conflictInfo,
+            additionalInfo: formData.additionalInfo,
+            signature: signatureImage 
+          }),
+        });
+
+        if (res.ok) {
+          setShowSuccessModal(true);
+        } else {
+          alert("Deklaratsiyani saqlashda xatolik yuz berdi.");
+        }
+      } catch (error) {
+        console.error("Saqlashda xato:", error);
+      } finally {
         setIsLoading(false);
-        setShowSuccessModal(true);
-      }, 1500);
+      }
     }
   };
 
@@ -217,29 +280,6 @@ export default function DeclarationPage() {
     setFormData({ ...formData, [type]: formData[type].filter((_, i) => i !== index) });
   };
 
-  // AVTO-TO'LDIRISH (MOCK DATA)
-  const handleAutofill = () => {
-    const savedData = {
-      personal: { fullName: "Valiyev Alisher Baxodirovich", branch: "Bosh ofis", position: "Boshqaruvchi", passport: "AA1234567", passportDate: "2018-05-12", pinfl: "31205931234567" },
-      relatives: [
-        { relationship: "Otasi", fullName: "Valiyev Baxodir", passport: "AB7654321", passportDate: "2015-11-20", pinfl: "31205601234567", noInfo: false, worksAtNBU: true, nbuBranch: "Toshkent shahar Bosh filiali", nbuPosition: "Kredit mutaxassisi" },
-        { relationship: "Turmush o'rtog'i", fullName: "Valiyeva Nargiza", passport: "AC9876543", passportDate: "2020-01-15", pinfl: "41205981234567", noInfo: false, worksAtNBU: false, nbuBranch: "", nbuPosition: "" }
-      ],
-      myCompanies: [
-        { companyName: "Alisher IT Solutions MCHJ", stir: "305123456", isLeader: "Ha", roleInCompany: "Ta'sischi", sharePercent: "100", noDetails: false }
-      ],
-      relativeCompanies: [
-        { relativeName: "Valiyev Baxodir", companyName: "Baxodir Qurilish", stir: "205987654", isLeader: "Ha", roleInCompany: "Rahbar", sharePercent: "50", noDetails: false }
-      ],
-      conflictInfo: '',
-      additionalInfo: ''
-    };
-
-    setFormData(savedData);
-    setIsAutofilled(true);
-  };
-
-  // FOOTNOTE
   const renderFootnote = () => (
     <div className="mt-8 pt-4 border-t border-slate-200">
       <p className="text-[11px] text-slate-500 text-justify leading-relaxed">
@@ -286,7 +326,6 @@ export default function DeclarationPage() {
 
       <main className="max-w-5xl mx-auto px-6 mt-8">
         
-        {/* Error Messages */}
         {errors.length > 0 && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl">
             <div className="flex items-center gap-2 text-red-700 font-semibold mb-2">
@@ -322,16 +361,13 @@ export default function DeclarationPage() {
         {/* Form Content */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-8">
           
-          {/* 1-QADAM: Shaxsiy ma'lumotlar */}
+          {/* 1-QADAM */}
           {currentStep === 1 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               
-              {/* AVTO-TO'LDIRISH BLOKI */}
               <div className="mb-10 bg-[#F0F5FF] border border-[#D6E4FF] p-5 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex gap-3">
-                  <div className="mt-0.5">
-                     <Save className="w-5 h-5 text-blue-700" />
-                  </div>
+                  <div className="mt-0.5"><Save className="w-5 h-5 text-blue-700" /></div>
                   <div>
                     <h4 className="text-sm font-bold text-[#1E3A8A] mb-1">Saqlangan ma'lumotlar</h4>
                     <p className="text-xs text-blue-600">Oldingi yilgi yoki avvalgi to'ldirgan ma'lumotlaringiz asosida avtomatik to'ldirish imkoniyati.</p>
@@ -353,7 +389,6 @@ export default function DeclarationPage() {
                 </h2>
               </div>
 
-              {/* Hujjat uslubidagi interaktiv matn */}
               <div className="bg-slate-50 p-6 md:p-8 rounded-xl border border-slate-200 mb-8 text-slate-800 leading-loose text-lg md:text-xl font-medium shadow-inner">
                 Men, 
                 <input 
@@ -387,7 +422,7 @@ export default function DeclarationPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">
-                    Identifikatsiya ID-kartasi yoki biometrik pasport ma'lumotlari (seriyasi, raqami, berilgan sanasi)
+                    Identifikatsiya ID-kartasi yoki biometrik pasport (seriyasi, raqami, berilgan sanasi)
                   </label>
                   <div className="flex gap-2">
                     <input 
@@ -407,9 +442,7 @@ export default function DeclarationPage() {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">
-                    Jismoniy shaxsning shaxsiy identifikatsiya raqami (JSHSHIR) (mavjud bo'lgan taqdirda)
-                  </label>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">JSHSHIR</label>
                   <input 
                     type="text" 
                     maxLength={14} 
@@ -423,7 +456,7 @@ export default function DeclarationPage() {
             </div>
           )}
 
-          {/* 2-QADAM: Yaqin qarindoshlar */}
+          {/* 2-QADAM */}
           {currentStep === 2 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="flex justify-between items-center mb-6 border-b pb-4">
@@ -436,17 +469,20 @@ export default function DeclarationPage() {
                 </button>
               </div>
 
+              {formData.relatives.length === 0 && (
+                <div className="text-center py-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl mb-6">
+                  <p className="text-slate-500 mb-4 font-medium">Sizda NBU tizimida ishlaydigan yoki biznesga ega yaqin qarindoshlar yo'q bo'lsa, shunchaki "Keyingisi" tugmasini bosing.</p>
+                </div>
+              )}
+
               <div className="space-y-6">
                 {formData.relatives.map((relative, index) => (
                   <div key={index} className="p-5 border border-slate-200 rounded-xl bg-slate-50/50 relative group transition-all">
-                    {index > 0 && (
-                      <button onClick={() => removeRelative(index)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full hover:bg-red-200 transition-colors shadow-sm">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button onClick={() => removeRelative(index)} className="absolute -top-3 -right-3 bg-red-100 text-red-600 p-2 rounded-full hover:bg-red-200 transition-colors shadow-sm">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                     
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
-                      {/* Qarindoshlik darajasi */}
                       <div className="md:col-span-1">
                         <label className="block text-xs font-bold text-slate-600 mb-1">Qarindoshlik</label>
                         <select 
@@ -465,7 +501,6 @@ export default function DeclarationPage() {
                         </select>
                       </div>
 
-                      {/* F.I.Sh */}
                       <div className="md:col-span-3">
                         <label className="block text-xs font-bold text-slate-600 mb-1">Familiya, ismi, otasining ismi</label>
                         <input 
@@ -484,10 +519,9 @@ export default function DeclarationPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Pasport */}
                       <div>
                         <label className="block text-xs font-bold text-slate-600 mb-1 leading-snug">
-                          Identifikatsiya ID-kartasi yoki biometrik pasport ma'lumotlari (seriyasi, raqami, berilgan sanasi)
+                          Pasport (seriyasi, raqami, berilgan sanasi)
                         </label>
                         <div className="flex gap-2">
                           <input 
@@ -517,11 +551,8 @@ export default function DeclarationPage() {
                         </div>
                       </div>
 
-                      {/* JSHSHIR */}
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1 leading-snug">
-                          Jismoniy shaxsning shaxsiy identifikatsiya raqami (JSHSHIR) (mavjud bo'lgan taqdirda)
-                        </label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1 leading-snug">JSHSHIR</label>
                         <input 
                           type="text" 
                           maxLength={14}
@@ -538,7 +569,6 @@ export default function DeclarationPage() {
                       </div>
                     </div>
 
-                    {/* Checkbox */}
                     <div className="mt-4 flex items-center gap-2">
                       <input 
                         type="checkbox" 
@@ -561,7 +591,6 @@ export default function DeclarationPage() {
                       </label>
                     </div>
 
-                    {/* NBU da ishlaydimi Qismi */}
                     <div className="mt-5 pt-4 border-t border-slate-200">
                       <p className="text-sm font-bold text-slate-700 mb-3">Ushbu qarindoshingiz NBU tizimida ishlaydimi?</p>
                       <div className="flex items-center gap-6 mb-4">
@@ -597,7 +626,6 @@ export default function DeclarationPage() {
                         </label>
                       </div>
 
-                      {/* Filial va Lavozim INPUTLARI */}
                       {relative.worksAtNBU && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300 bg-blue-50/50 p-4 rounded-lg border border-blue-100">
                           <div>
@@ -634,7 +662,6 @@ export default function DeclarationPage() {
                   </div>
                 ))}
               </div>
-
               {renderFootnote()}
             </div>
           )}
@@ -643,16 +670,21 @@ export default function DeclarationPage() {
           {currentStep === 3 && (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
               
-              {/* O'zining kompaniyalari */}
               <div>
                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-4">
                   <h2 className="text-sm font-bold text-slate-800 leading-relaxed md:w-3/4">
-                    Xodim qaysi yuridik shaxsning ustav fondi (ustav kapitali) aksiyalariga yoki ulushlariga egalik qilsa yoxud unda boshqaruv organining rahbari yoki a'zosi bo'lsa, o'sha yuridik shaxsga oid ma'lumotlar
+                    Xodim qaysi yuridik shaxsning aksiyalariga yoki ulushlariga egalik qilsa yoxud unda rahbar/a'zo bo'lsa
                   </h2>
                   <button onClick={() => addCompany('myCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
                     <Plus className="w-4 h-4" /> Qo'shish
                   </button>
                 </div>
+
+                {formData.myCompanies.length === 0 && formData.relativeCompanies.length === 0 && (
+                  <div className="text-center py-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl mb-6">
+                    <p className="text-slate-500 mb-4 font-medium">Sizda aloqador yuridik shaxslar (kompaniyalar) bo'lmasa, shunchaki "Keyingisi" tugmasini bosing.</p>
+                  </div>
+                )}
 
                 <div className="space-y-4">
                   {formData.myCompanies.map((comp, idx) => (
@@ -673,7 +705,7 @@ export default function DeclarationPage() {
                           />
                         </div>
                         <div className="w-full md:w-1/3">
-                          <label className="block text-xs font-bold text-slate-600 mb-1">Soliq to'lovchining identifikatsiya raqami (STIR)</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">STIR</label>
                           <input 
                             type="text" 
                             maxLength={9} 
@@ -687,11 +719,9 @@ export default function DeclarationPage() {
                             className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white text-slate-900" 
                           />
                         </div>
-                        {idx > 0 && (
-                           <button onClick={() => removeCompany('myCompanies', idx)} className="mb-0.5 p-2.5 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-transparent hover:border-red-200">
-                             <Trash2 className="w-4 h-4"/>
-                           </button>
-                        )}
+                        <button onClick={() => removeCompany('myCompanies', idx)} className="mb-0.5 p-2.5 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-transparent hover:border-red-200">
+                          <Trash2 className="w-4 h-4"/>
+                        </button>
                       </div>
 
                       <div className="mt-2">
@@ -799,11 +829,10 @@ export default function DeclarationPage() {
                 </div>
               </div>
 
-              {/* Qarindoshning kompaniyalari */}
               <div>
-                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-4">
+                 <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4 border-b pb-4 mt-8">
                   <h2 className="text-sm font-bold text-slate-800 leading-relaxed md:w-3/4">
-                    Xodimning yaqin qarindoshi qaysi yuridik shaxsning ustav fondi (ustav kapitali) aksiyalariga yoki ulushlariga egalik qilsa yoxud unda boshqaruv organining rahbari yoki a'zosi bo'lsa, o'sha yuridik shaxsga oid ma'lumotlar
+                    Xodimning yaqin qarindoshi qaysi yuridik shaxsning aksiyalariga yoki ulushlariga egalik qilsa yoxud unda rahbar/a'zo bo'lsa
                   </h2>
                   <button onClick={() => addCompany('relativeCompanies')} className="text-sm font-medium text-blue-600 flex items-center gap-1 hover:text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap">
                     <Plus className="w-4 h-4" /> Qo'shish
@@ -850,7 +879,7 @@ export default function DeclarationPage() {
                           />
                         </div>
                         <div className="w-full md:w-1/4">
-                          <label className="block text-xs font-bold text-slate-600 mb-1">Soliq to'lovchining identifikatsiya raqami (STIR)</label>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">STIR</label>
                           <input 
                             type="text" 
                             maxLength={9} 
@@ -864,11 +893,9 @@ export default function DeclarationPage() {
                             className="w-full px-3 py-2 border border-slate-300 rounded-md text-sm outline-none focus:border-blue-600 bg-white text-slate-900" 
                           />
                         </div>
-                        {idx > 0 && (
-                           <button onClick={() => removeCompany('relativeCompanies', idx)} className="mb-0.5 p-2.5 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-transparent hover:border-red-200">
-                             <Trash2 className="w-4 h-4"/>
-                           </button>
-                        )}
+                        <button onClick={() => removeCompany('relativeCompanies', idx)} className="mb-0.5 p-2.5 text-red-500 hover:bg-red-100 rounded-md transition-colors border border-transparent hover:border-red-200">
+                          <Trash2 className="w-4 h-4"/>
+                        </button>
                       </div>
 
                       <div className="mt-2">
