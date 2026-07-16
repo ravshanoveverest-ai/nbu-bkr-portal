@@ -127,28 +127,34 @@ export default function AdminDashboard() {
   }, [selectedCampaignId, rawUsers, rawDeclarations, isLoading]);
 
   const calculateDashboardData = () => {
-    // 1. ASOSIY QAT'IY QOIDA: Jami xodimlar roppa-rosa users bazasi uzunligiga teng. Hech qachon o'zgarmaydi.
+    // 1. ASOSIY QAT'IY QOIDA: Jami xodimlar roppa-rosa users bazasi uzunligiga teng.
     const totalUsersCount = rawUsers.length;
 
-    // 2. Faqat deklaratsiyalarni ajratib olamiz
+    // 2. FAQAT "Yillik deklaratsiya"larni ajratib olamiz (Rotatsiya va Yangi xodim kirmaydi!)
     let filteredDeclarations = rawDeclarations.filter((decl: any) => {
       const isDeclaration = !!decl.personalInfo; 
-      const isYillik = !decl.declarationType || decl.declarationType.includes('Yillik') || decl.declarationType === 'Yillik deklaratsiya';
+      // Xato shu joyda edi, endi to'g'ridan to'g'ri 'type' ni tekshiramiz
+      const isYillik = !decl.type || decl.type === 'yillik'; 
       return isDeclaration && isYillik;
     });
 
-    // Muddatga (Campaign) ko'ra saralash
+    // 3. Muddatga (Campaign) ko'ra qat'iy saralash
     if (selectedCampaignId !== 'all') {
-      const campaign = campaigns.find(c => c._id === selectedCampaignId);
-      if (campaign) {
-        const startTime = new Date(campaign.startDate).getTime();
-        const endTime = new Date(campaign.endDate).getTime() + 86400000; 
-        
-        filteredDeclarations = filteredDeclarations.filter(decl => {
+      filteredDeclarations = filteredDeclarations.filter(decl => {
+        // Agar deklaratsiyada campaignId bo'lsa (yangi tizim)
+        if (decl.campaignId) {
+          return decl.campaignId === selectedCampaignId;
+        }
+        // Agar eski ma'lumot bo'lsa, sana orqali tekshiramiz
+        const campaign = campaigns.find(c => c._id === selectedCampaignId);
+        if (campaign) {
+          const startTime = new Date(campaign.startDate).getTime();
+          const endTime = new Date(campaign.endDate).getTime() + 86400000; 
           const declTime = new Date(decl.createdAt || decl.date).getTime();
           return declTime >= startTime && declTime <= endTime;
-        });
-      }
+        }
+        return false;
+      });
     }
 
     const branchMap: any = {};
@@ -165,7 +171,7 @@ export default function AdminDashboard() {
       };
     });
 
-    // 3. Foydalanuvchilarni o'z filial va hududiga to'g'ri taqsimlaymiz
+    // Foydalanuvchilarni o'z filial va hududiga taqsimlaymiz
     rawUsers.forEach((u: any) => {
       const branchName = u.branch || "Noma'lum filial";
       const regionName = getRegionName(branchName);
@@ -192,22 +198,19 @@ export default function AdminDashboard() {
     let highRiskCountGlobal = 0;
     const globalUniqueSubmitters = new Set();
 
-    // 4. Deklaratsiyalarni tahlil qilamiz (Dublikatlarni o'tkazib yuboramiz)
+    // Deklaratsiyalarni tahlil qilish va dublikatlarni tozalash
     filteredDeclarations.forEach((decl: any) => {
       const branchName = decl.personalInfo?.branch || "Noma'lum filial";
       const regionName = getRegionName(branchName);
       
-      // FAQAT aniq identifikatorlar orqali odamni taniymiz. (Hujjat IDsi kirmaydi, chunki u dublikat bo'lishi mumkin)
-      const identifier = decl.personalInfo?.fullName || decl.personalInfo?.passport || "NoName";
+      const identifier = decl.userEmail || decl.personalInfo?.fullName || decl.personalInfo?.passport || "NoName";
       
-      // Agar bu xodim oldin sanalgan bo'lsa, algoritm uni yana hisoblamaydi
       if (globalUniqueSubmitters.has(identifier) && identifier !== "NoName") {
          return; 
       }
       
       globalUniqueSubmitters.add(identifier);
 
-      // ALGORITMIK XAVF HISOBI
       let score = 0;
       let reasons: string[] = [];
 
@@ -232,7 +235,7 @@ export default function AdminDashboard() {
           id: Object.keys(branchMap).length + 1,
           name: branchName,
           region: regionName,
-          employees: 0, // Users bazada yo'q filial bo'lsa, xodimlar soni 0 bo'lib qoladi
+          employees: 0, 
           scoreSum: 0,
           rawSubmitted: 0,
           reasons: new Set(),
@@ -256,7 +259,8 @@ export default function AdminDashboard() {
     });
 
     const finalBranches = Object.values(branchMap).map((b: any) => {
-      const submitted = b.uniqueSubmitters.size;
+      // Qat'iy chegara: filialdagi topshirganlar soni jami xodimlardan oshmasligi kerak
+      const submitted = Math.min(b.uniqueSubmitters.size, b.employees > 0 ? b.employees : b.uniqueSubmitters.size);
       const avgScore = b.rawSubmitted > 0 ? Math.round(b.scoreSum / b.rawSubmitted) : 0;
       return {
         ...b,
@@ -278,11 +282,12 @@ export default function AdminDashboard() {
     const finalProgress = Object.values(regionMap)
       .filter((r: any) => r.totalUsers > 0 || r.uniqueSubmitters.size > 0)
       .map((r: any) => {
-        const submitted = r.uniqueSubmitters.size;
+        // Qat'iy chegara: regiondagi topshirganlar jami xodimlardan oshmasin
+        const submitted = Math.min(r.uniqueSubmitters.size, r.totalUsers > 0 ? r.totalUsers : r.uniqueSubmitters.size);
         return {
           id: r.id,
           name: r.name,
-          total: r.totalUsers, // Hech qanday mantiqsiz o'zgartirishlarsiz faqat asl son olinadi
+          total: r.totalUsers,
           submitted: submitted
         };
       })
@@ -301,11 +306,13 @@ export default function AdminDashboard() {
     setMapData(finalMap);
     setProgressData(finalProgress);
 
-    // QAT'IY XULOSA: Jami xodimlar qancha ro'yxatdan o'tgan bo'lsa shuncha (3 ta). 
-    // Topshirganlar esa qancha marta yuborishidan qat'iy nazar unikal ismlari soni bo'yicha hisoblanadi (1 ta).
+    // Global submitted hisoblash va 100% dan oshib ketishini oldini olish
+    let rawCalcSubmitted = globalUniqueSubmitters.size > 0 && globalUniqueSubmitters.has("NoName") ? globalUniqueSubmitters.size - 1 : globalUniqueSubmitters.size;
+    let clampedSubmitted = Math.min(rawCalcSubmitted, totalUsersCount);
+
     setGlobalStats({
       totalUsers: totalUsersCount, 
-      submittedCount: globalUniqueSubmitters.size > 0 && globalUniqueSubmitters.has("NoName") ? globalUniqueSubmitters.size - 1 : globalUniqueSubmitters.size, 
+      submittedCount: clampedSubmitted, 
       highRiskCount: highRiskCountGlobal,
       mostDangerousRegion: mostDangerous
     });
