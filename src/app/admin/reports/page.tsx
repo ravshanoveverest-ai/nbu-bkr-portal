@@ -9,7 +9,8 @@ const ImageModule = require('docxtemplater-image-module-free');
 import { saveAs } from 'file-saver';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
-  LogOut, User, Download, FileBarChart, Briefcase, Network, Landmark
+  LogOut, User, Download, FileBarChart, Briefcase, Network, Landmark,
+  CheckSquare
 } from 'lucide-react';
 
 // Rasmlarni Word'ga joylash uchun yordamchi funksiya
@@ -324,6 +325,9 @@ export default function ReportsPage() {
           </Link>
           <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 font-bold rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
+          </Link>
+          <Link href="/admin/registry" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
+            <CheckSquare className="w-5 h-5" /> Reyestr
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">

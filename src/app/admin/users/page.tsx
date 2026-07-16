@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   Settings, LogOut, Search, Trash2, 
-  Shield, User as UserIcon, X, FileBarChart, AlertTriangle
+  Shield, User as UserIcon, X, FileBarChart, AlertTriangle,
+  CheckSquare
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -141,6 +142,9 @@ const adminRole = "BKR Boshlig'i";
           </Link>
           <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
+          </Link>
+          <Link href="/admin/registry" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
+            <CheckSquare className="w-5 h-5" /> Reyestr
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">

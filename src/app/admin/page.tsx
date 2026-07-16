@@ -6,7 +6,8 @@ import {
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   LogOut, User, Activity, MapPin, BarChart3, AlertTriangle,
   Search, Filter, ChevronLeft, ChevronRight, Building2, Info, X, 
-  CheckCircle, Zap, Shield, FileBarChart
+  CheckCircle, Zap, Shield, FileBarChart,
+  CheckSquare
 } from 'lucide-react';
 
 // --- 1. HUDUDLAR 3D XARITASI UCHUN ASOSIY KOORDINATALAR ---
@@ -27,7 +28,6 @@ const baseMapCoords = [
   { id: 14, name: "Andijon", x: 96, y: 35 },
 ];
 
-// Filial nomidan kelib chiqib, qaysi hududga tegishli ekanligini topuvchi yordamchi funksiya
 const getRegionName = (branchName: string) => {
   const b = (branchName || '').toLowerCase();
   if (b.includes('qoraqalpoq')) return "Qoraqalpog'iston";
@@ -39,11 +39,11 @@ const getRegionName = (branchName: string) => {
   if (b.includes('surxondaryo') || b.includes('denov')) return "Surxondaryo";
   if (b.includes('jizzax')) return "Jizzax";
   if (b.includes('sirdaryo') || b.includes('guliston')) return "Sirdaryo";
-  if (b.includes('toshkent v') || b.includes('zangiota') || b.includes('zangiota')) return "Toshkent viloyati";
+  if (b.includes('toshkent v') || b.includes('zangiota')) return "Toshkent viloyati";
   if (b.includes('namangan') || b.includes('chust')) return "Namangan";
   if (b.includes("farg'ona") || b.includes("marg'ilon")) return "Farg'ona";
   if (b.includes('andijon') || b.includes('asaka')) return "Andijon";
-  return "Toshkent shahri"; // Default holat
+  return "Toshkent shahri"; 
 };
 
 const getStatusConfig = (risk: number) => {
@@ -60,9 +60,18 @@ export default function AdminDashboard() {
   const [showAlgoModal, setShowAlgoModal] = useState(false);
   const itemsPerPage = 10; 
 
-  // --- DINAMIK MA'LUMOTLAR UCHUN STATE'LAR ---
+  // --- RAW DATA STATES ---
   const [isLoading, setIsLoading] = useState(true);
+  const [rawUsers, setRawUsers] = useState<any[]>([]);
+  const [rawDeclarations, setRawDeclarations] = useState<any[]>([]);
+  
+  // --- MUDDAT (CAMPAIGN) STATES ---
+  const [campaigns, setCampaigns] = useState<any[]>([]);
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string>('all');
+
   const [adminProfile, setAdminProfile] = useState({ name: 'Admin', role: "BKR Boshlig'i" });
+  
+  // --- CALCULATED STATES ---
   const [mapData, setMapData] = useState<any[]>(baseMapCoords);
   const [branchesData, setBranchesData] = useState<any[]>([]);
   const [progressData, setProgressData] = useState<any[]>([]);
@@ -74,152 +83,232 @@ export default function AdminDashboard() {
   });
 
   useEffect(() => {
-    // Profilni yuklash
     const userInfoString = localStorage.getItem('user_info');
     if (userInfoString) {
       const parsed = JSON.parse(userInfoString);
       setAdminProfile({ name: parsed.fullName || 'Admin', role: parsed.role === 'admin' ? "BKR Administrator" : "BKR Xodimi" });
     }
-
-    fetchAndCalculateData();
+    fetchInitialData();
   }, []);
 
-  const fetchAndCalculateData = async () => {
+  const fetchInitialData = async () => {
     setIsLoading(true);
     try {
-      // 1. Bazadan foydalanuvchilar va deklaratsiyalarni chaqiramiz
-      const resUsers = await fetch('https://nbu-bkr-api.onrender.com/api/auth/users').catch(() => ({ ok: false, json: () => [] }));
-      const resDecls = await fetch('https://nbu-bkr-api.onrender.com/api/declarations').catch(() => ({ ok: false, json: () => [] }));
+      const [resUsers, resDecls, resCamps] = await Promise.all([
+        fetch('https://nbu-bkr-api.onrender.com/api/auth/users').catch(() => ({ ok: false, json: () => [] })),
+        fetch('https://nbu-bkr-api.onrender.com/api/declarations').catch(() => ({ ok: false, json: () => [] })),
+        fetch('https://nbu-bkr-api.onrender.com/api/campaigns').catch(() => ({ ok: false, json: () => [] }))
+      ]);
       
       const users = resUsers.ok ? await (resUsers as Response).json() : [];
       const declarations = resDecls.ok ? await (resDecls as Response).json() : [];
+      const camps = resCamps.ok ? await (resCamps as Response).json() : [];
 
-      // Vaqtinchalik ob'ektlar yaratib olamiz
-      const branchMap: any = {};
-      const regionMap: any = {};
+      setRawUsers(users);
+      setRawDeclarations(declarations);
+      setCampaigns(camps);
 
-      baseMapCoords.forEach(c => {
-        regionMap[c.name] = { ...c, riskSum: 0, submitted: 0, totalUsers: 0, dangerousCount: 0 };
-      });
-
-      let highRiskCountGlobal = 0;
-
-      // Xodimlarni hududlarga biriktiramiz (Global sonlar uchun)
-      users.forEach((u: any) => {
-        const region = getRegionName(u.branch || '');
-        if (regionMap[region]) {
-          regionMap[region].totalUsers += 1;
-        }
-      });
-
-      // 2. DEKLARATSIYALARNI TAHLIL QILAMIZ (Yurak qismi)
-      declarations.forEach((decl: any) => {
-        const branchName = decl.personalInfo?.branch || "Noma'lum filial";
-        const regionName = getRegionName(branchName);
-
-        // ALGORITMIK XAVF HISOBI
-        let score = 0;
-        let reasons: string[] = [];
-
-        if (decl.relatives && decl.relatives.some((r: any) => r.worksAtNBU)) {
-          score += 40; reasons.push("Qarindoshi NBU da ishlaydi");
-        }
-        if (decl.myCompanies && decl.myCompanies.length > 0) {
-          score += 50; reasons.push("O'zining nomida MCHJ mavjud");
-        }
-        if (decl.relativeCompanies && decl.relativeCompanies.length > 0) {
-          score += 30; reasons.push("Qarindoshi biznesga aloqador");
-        }
-        if (score === 0) {
-          // Eng kamida 5-10 ball (Yashil zona) standart holat uchun
-          score = Math.floor(Math.random() * 10) + 5; 
-          reasons.push("Xavf aniqlanmadi");
-        }
-        if (score > 100) score = 100;
-
-        if (score >= 60) highRiskCountGlobal++;
-
-        // Filial ma'lumotlarini to'ldirish
-        if (!branchMap[branchName]) {
-          branchMap[branchName] = {
-            id: Object.keys(branchMap).length + 1,
-            name: branchName,
-            region: regionName,
-            employees: 0, 
-            submitted: 0,
-            scoreSum: 0,
-            reasons: new Set()
-          };
-        }
-        branchMap[branchName].submitted += 1;
-        // Agar foydalanuvchilar filialini aniq bilmasak, vaqtinchalik xodimlar sonini bitta ko'p deb faraz qilamiz
-        branchMap[branchName].employees += 1; 
-        branchMap[branchName].scoreSum += score;
-        if (score >= 25) {
-          reasons.filter(r => r !== "Xavf aniqlanmadi").forEach(r => branchMap[branchName].reasons.add(r));
-        }
-
-        // Hudud (Xarita va Progress) ma'lumotlarini to'ldirish
-        if (regionMap[regionName]) {
-          regionMap[regionName].submitted += 1;
-          regionMap[regionName].riskSum += score;
-          if (score >= 60) regionMap[regionName].dangerousCount += 1;
-        }
-      });
-
-      // 3. Ma'lumotlarni Frontend formalariga o'g'irish
-      const finalBranches = Object.values(branchMap).map((b: any) => {
-        const avgScore = b.submitted > 0 ? Math.round(b.scoreSum / b.submitted) : 0;
-        return {
-          ...b,
-          score: avgScore,
-          risk: avgScore >= 60 ? 'Qizil' : avgScore >= 25 ? 'Sariq' : 'Yashil',
-          reason: b.reasons.size > 0 ? Array.from(b.reasons).join('; ') : "Xavf aniqlanmadi"
-        };
-      });
-
-      const finalMap = Object.values(regionMap).map((r: any) => ({
-        id: r.id,
-        name: r.name,
-        x: r.x,
-        y: r.y,
-        risk: r.submitted > 0 ? Math.round(r.riskSum / r.submitted) : 0
-      }));
-
-      const finalProgress = Object.values(regionMap)
-        .filter((r: any) => r.totalUsers > 0 || r.submitted > 0)
-        .map((r: any) => ({
-          id: r.id,
-          name: r.name,
-          total: r.totalUsers > r.submitted ? r.totalUsers : r.submitted + Math.floor(Math.random() * 10), // Kichik fallback
-          submitted: r.submitted
-        }))
-        .sort((a, b) => b.submitted - a.submitted)
-        .slice(0, 4); // Eng ko'p topshirgan 4 ta hudud
-
-      let mostDangerous = { name: "Hozircha xavfsiz", risk: 0, total: 0, dangerous: 0 };
-      Object.values(regionMap).forEach((r: any) => {
-        const avgRisk = r.submitted > 0 ? Math.round(r.riskSum / r.submitted) : 0;
-        if (avgRisk > mostDangerous.risk) {
-          mostDangerous = { name: r.name, risk: avgRisk, total: r.submitted, dangerous: r.dangerousCount };
-        }
-      });
-
-      setBranchesData(finalBranches);
-      setMapData(finalMap);
-      setProgressData(finalProgress);
-      setGlobalStats({
-        totalUsers: users.length > 0 ? users.length : declarations.length, // Fallback
-        submittedCount: declarations.length,
-        highRiskCount: highRiskCountGlobal,
-        mostDangerousRegion: mostDangerous
-      });
+      const activeCamp = camps.find((c: any) => c.status === 'active');
+      if (activeCamp) {
+        setSelectedCampaignId(activeCamp._id);
+      }
 
     } catch (error) {
-      console.error("Ma'lumotlarni hisoblashda xatolik:", error);
+      console.error("Ma'lumotlarni yuklashda xatolik:", error);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (!isLoading) {
+      calculateDashboardData();
+    }
+  }, [selectedCampaignId, rawUsers, rawDeclarations, isLoading]);
+
+  const calculateDashboardData = () => {
+    // 1. ASOSIY QAT'IY QOIDA: Jami xodimlar roppa-rosa users bazasi uzunligiga teng. Hech qachon o'zgarmaydi.
+    const totalUsersCount = rawUsers.length;
+
+    // 2. Faqat deklaratsiyalarni ajratib olamiz
+    let filteredDeclarations = rawDeclarations.filter((decl: any) => {
+      const isDeclaration = !!decl.personalInfo; 
+      const isYillik = !decl.declarationType || decl.declarationType.includes('Yillik') || decl.declarationType === 'Yillik deklaratsiya';
+      return isDeclaration && isYillik;
+    });
+
+    // Muddatga (Campaign) ko'ra saralash
+    if (selectedCampaignId !== 'all') {
+      const campaign = campaigns.find(c => c._id === selectedCampaignId);
+      if (campaign) {
+        const startTime = new Date(campaign.startDate).getTime();
+        const endTime = new Date(campaign.endDate).getTime() + 86400000; 
+        
+        filteredDeclarations = filteredDeclarations.filter(decl => {
+          const declTime = new Date(decl.createdAt || decl.date).getTime();
+          return declTime >= startTime && declTime <= endTime;
+        });
+      }
+    }
+
+    const branchMap: any = {};
+    const regionMap: any = {};
+
+    baseMapCoords.forEach(c => {
+      regionMap[c.name] = { 
+        ...c, 
+        riskSum: 0, 
+        rawSubmitted: 0, 
+        totalUsers: 0, 
+        dangerousCount: 0, 
+        uniqueSubmitters: new Set() 
+      };
+    });
+
+    // 3. Foydalanuvchilarni o'z filial va hududiga to'g'ri taqsimlaymiz
+    rawUsers.forEach((u: any) => {
+      const branchName = u.branch || "Noma'lum filial";
+      const regionName = getRegionName(branchName);
+
+      if (regionMap[regionName]) {
+        regionMap[regionName].totalUsers += 1;
+      }
+
+      if (!branchMap[branchName]) {
+        branchMap[branchName] = {
+          id: Object.keys(branchMap).length + 1,
+          name: branchName,
+          region: regionName,
+          employees: 0, 
+          scoreSum: 0,
+          rawSubmitted: 0,
+          reasons: new Set(),
+          uniqueSubmitters: new Set()
+        };
+      }
+      branchMap[branchName].employees += 1;
+    });
+
+    let highRiskCountGlobal = 0;
+    const globalUniqueSubmitters = new Set();
+
+    // 4. Deklaratsiyalarni tahlil qilamiz (Dublikatlarni o'tkazib yuboramiz)
+    filteredDeclarations.forEach((decl: any) => {
+      const branchName = decl.personalInfo?.branch || "Noma'lum filial";
+      const regionName = getRegionName(branchName);
+      
+      // FAQAT aniq identifikatorlar orqali odamni taniymiz. (Hujjat IDsi kirmaydi, chunki u dublikat bo'lishi mumkin)
+      const identifier = decl.personalInfo?.fullName || decl.personalInfo?.passport || "NoName";
+      
+      // Agar bu xodim oldin sanalgan bo'lsa, algoritm uni yana hisoblamaydi
+      if (globalUniqueSubmitters.has(identifier) && identifier !== "NoName") {
+         return; 
+      }
+      
+      globalUniqueSubmitters.add(identifier);
+
+      // ALGORITMIK XAVF HISOBI
+      let score = 0;
+      let reasons: string[] = [];
+
+      if (decl.relatives && decl.relatives.some((r: any) => r.worksAtNBU)) {
+        score += 40; reasons.push("Qarindoshi NBU da ishlaydi");
+      }
+      if (decl.myCompanies && decl.myCompanies.length > 0) {
+        score += 50; reasons.push("O'zining nomida MCHJ mavjud");
+      }
+      if (decl.relativeCompanies && decl.relativeCompanies.length > 0) {
+        score += 30; reasons.push("Qarindoshi biznesga aloqador");
+      }
+      if (score === 0) {
+        score = Math.floor(Math.random() * 10) + 5; 
+        reasons.push("Xavf aniqlanmadi");
+      }
+      if (score > 100) score = 100;
+      if (score >= 60) highRiskCountGlobal++;
+
+      if (!branchMap[branchName]) {
+        branchMap[branchName] = {
+          id: Object.keys(branchMap).length + 1,
+          name: branchName,
+          region: regionName,
+          employees: 0, // Users bazada yo'q filial bo'lsa, xodimlar soni 0 bo'lib qoladi
+          scoreSum: 0,
+          rawSubmitted: 0,
+          reasons: new Set(),
+          uniqueSubmitters: new Set()
+        };
+      }
+
+      branchMap[branchName].uniqueSubmitters.add(identifier);
+      branchMap[branchName].rawSubmitted += 1;
+      branchMap[branchName].scoreSum += score;
+      if (score >= 25) {
+        reasons.filter(r => r !== "Xavf aniqlanmadi").forEach(r => branchMap[branchName].reasons.add(r));
+      }
+
+      if (regionMap[regionName]) {
+        regionMap[regionName].uniqueSubmitters.add(identifier);
+        regionMap[regionName].rawSubmitted += 1;
+        regionMap[regionName].riskSum += score;
+        if (score >= 60) regionMap[regionName].dangerousCount += 1;
+      }
+    });
+
+    const finalBranches = Object.values(branchMap).map((b: any) => {
+      const submitted = b.uniqueSubmitters.size;
+      const avgScore = b.rawSubmitted > 0 ? Math.round(b.scoreSum / b.rawSubmitted) : 0;
+      return {
+        ...b,
+        submitted: submitted,
+        score: avgScore,
+        risk: avgScore >= 60 ? 'Qizil' : avgScore >= 25 ? 'Sariq' : 'Yashil',
+        reason: b.reasons.size > 0 ? Array.from(b.reasons).join('; ') : "Xavf aniqlanmadi"
+      };
+    });
+
+    const finalMap = Object.values(regionMap).map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      x: r.x,
+      y: r.y,
+      risk: r.rawSubmitted > 0 ? Math.round(r.riskSum / r.rawSubmitted) : 0
+    }));
+
+    const finalProgress = Object.values(regionMap)
+      .filter((r: any) => r.totalUsers > 0 || r.uniqueSubmitters.size > 0)
+      .map((r: any) => {
+        const submitted = r.uniqueSubmitters.size;
+        return {
+          id: r.id,
+          name: r.name,
+          total: r.totalUsers, // Hech qanday mantiqsiz o'zgartirishlarsiz faqat asl son olinadi
+          submitted: submitted
+        };
+      })
+      .sort((a, b) => b.submitted - a.submitted)
+      .slice(0, 4);
+
+    let mostDangerous = { name: "Hozircha xavfsiz", risk: 0, total: 0, dangerous: 0 };
+    Object.values(regionMap).forEach((r: any) => {
+      const avgRisk = r.rawSubmitted > 0 ? Math.round(r.riskSum / r.rawSubmitted) : 0;
+      if (avgRisk > mostDangerous.risk) {
+        mostDangerous = { name: r.name, risk: avgRisk, total: r.uniqueSubmitters.size, dangerous: r.dangerousCount };
+      }
+    });
+
+    setBranchesData(finalBranches);
+    setMapData(finalMap);
+    setProgressData(finalProgress);
+
+    // QAT'IY XULOSA: Jami xodimlar qancha ro'yxatdan o'tgan bo'lsa shuncha (3 ta). 
+    // Topshirganlar esa qancha marta yuborishidan qat'iy nazar unikal ismlari soni bo'yicha hisoblanadi (1 ta).
+    setGlobalStats({
+      totalUsers: totalUsersCount, 
+      submittedCount: globalUniqueSubmitters.size > 0 && globalUniqueSubmitters.has("NoName") ? globalUniqueSubmitters.size - 1 : globalUniqueSubmitters.size, 
+      highRiskCount: highRiskCountGlobal,
+      mostDangerousRegion: mostDangerous
+    });
   };
 
   const filteredBranches = useMemo(() => {
@@ -371,6 +460,9 @@ export default function AdminDashboard() {
           <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
           </Link>
+          <Link href="/admin/registry" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
+            <CheckSquare className="w-5 h-5" /> Reyestr
+          </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">
           <button onClick={() => { localStorage.clear(); window.location.href = '/login'; }} className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors">
@@ -400,15 +492,37 @@ export default function AdminDashboard() {
 
         <div className="flex-1 p-6 md:p-8 space-y-6">
           
+          {/* MUDDAT FILTRI */}
+          <div className="flex justify-end">
+            <div className="bg-white p-2 rounded-xl border border-slate-200 shadow-sm flex items-center gap-3">
+              <span className="text-xs font-bold text-slate-500 uppercase ml-2 flex items-center gap-1">
+                <Calendar className="w-4 h-4"/> Muddat:
+              </span>
+              <select
+                value={selectedCampaignId}
+                onChange={(e) => setSelectedCampaignId(e.target.value)}
+                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value="all">Barcha davrlar</option>
+                {campaigns.map(c => (
+                  <option key={c._id} value={c._id}>
+                    {c.year} [{new Date(c.startDate).toLocaleDateString('uz-UZ')} - {new Date(c.endDate).toLocaleDateString('uz-UZ')}] {c.status === 'active' ? '(FAOL)' : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
           {/* STATS */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Umumiy ko'rsatkich</p>
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
+              <p className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1">Topshirilgan deklaratsiyalar</p>
               <div className="flex items-end justify-between mb-3">
-                <h3 className="text-2xl font-black text-[#0A2540]">{globalStats.submittedCount} <span className="text-lg text-slate-400">/ {globalStats.totalUsers}</span></h3>
+                <h3 className="text-3xl font-black text-[#0A2540]">{globalStats.submittedCount} <span className="text-lg text-slate-400 font-bold">/ {globalStats.totalUsers} kishi</span></h3>
                 <div className="bg-blue-50 text-blue-600 text-xs font-bold px-2.5 py-1 rounded-md border border-blue-100">{globalPercentage}% Bajarildi</div>
               </div>
-              <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
+              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-blue-600 rounded-full transition-all duration-1000" style={{ width: `${globalPercentage}%` }}></div>
               </div>
             </div>
@@ -550,10 +664,10 @@ export default function AdminDashboard() {
                     </div>
                   );
                 }) : (
-                  <p className="text-slate-400 text-sm text-center mt-10">Hozircha ma'lumot yo'q</p>
+                  <p className="text-slate-400 text-sm text-center mt-10">Ushbu muddat uchun ma'lumot yo'q</p>
                 )}
               </div>
-              <Link href="/admin/declarations" className="block text-center w-full mt-6 py-2.5 bg-blue-50 text-blue-600 text-sm font-bold rounded-xl hover:bg-blue-100 transition-colors">
+              <Link href="/admin/declarations" className="block text-center w-full mt-6 py-2.5 bg-blue-50 text-blue-600 text-sm font-bold rounded-xl hover:bg-blue-100 transition-colors border border-blue-200">
                 Batafsil ko'rish
               </Link>
             </div>
@@ -633,7 +747,7 @@ export default function AdminDashboard() {
                       </td>
                     </tr>
                   )) : (
-                    <tr><td colSpan={5} className="p-8 text-center text-slate-500">Filiallar topilmadi.</td></tr>
+                    <tr><td colSpan={5} className="p-8 text-center text-slate-500 font-bold">Ushbu muddat bo'yicha ma'lumot topilmadi.</td></tr>
                   )}
                 </tbody>
               </table>

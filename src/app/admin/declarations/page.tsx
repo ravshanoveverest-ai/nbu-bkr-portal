@@ -4,7 +4,8 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
-  Settings, LogOut, Search, Download, FileBarChart 
+  Settings, LogOut, Search, Download, FileBarChart, 
+  CheckSquare
 } from 'lucide-react';
 
 // EXCEL VA WORD UCHUN KUTUBXONALAR
@@ -310,6 +311,9 @@ export default function DeclarationsPage() {
           </Link>
           <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
+          </Link>
+          <Link href="/admin/registry" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
+            <CheckSquare className="w-5 h-5" /> Reyestr
           </Link>
         </nav>
       </aside>

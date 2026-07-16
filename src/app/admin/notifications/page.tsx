@@ -10,7 +10,8 @@ import {
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   Settings, LogOut, Search, Filter, AlertTriangle, 
   CheckCircle, ChevronDown, Eye, User, X, MessageSquareWarning,
-  Clock, FileCheck, FileBarChart, Download
+  Clock, FileCheck, FileBarChart, Download,
+  CheckSquare
 } from 'lucide-react';
 
 function base64DataURLToArrayBuffer(dataURL: string) {
@@ -352,6 +353,9 @@ export default function NotificationsPage() {
           </Link>
           <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
+          </Link>
+          <Link href="/admin/registry" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
+            <CheckSquare className="w-5 h-5" /> Reyestr
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">
