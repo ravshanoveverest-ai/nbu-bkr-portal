@@ -229,9 +229,6 @@ export default function RegistryPage() {
           <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <ShieldAlert className="w-5 h-5" /> Xabarnomalar
           </Link>
-          <Link href="/admin/registry" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 font-bold rounded-lg transition-colors">
-            <CheckSquare className="w-5 h-5" /> Reyestr
-          </Link>
           <Link href="/admin/campaigns" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <Calendar className="w-5 h-5" /> Muddatlarni sozlash
           </Link>
@@ -240,6 +237,9 @@ export default function RegistryPage() {
           </Link>
           <Link href="/admin/reports" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileBarChart className="w-5 h-5" /> Hisobotlar
+          </Link>
+          <Link href="/admin/registry" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 font-bold rounded-lg transition-colors">
+            <CheckSquare className="w-5 h-5" /> Reyestr
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">
