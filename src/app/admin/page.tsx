@@ -28,22 +28,25 @@ const baseMapCoords = [
   { id: 14, name: "Andijon", x: 96, y: 35 },
 ];
 
-const getRegionName = (branchName: string) => {
-  const b = (branchName || '').toLowerCase();
-  if (b.includes('qoraqalpoq')) return "Qoraqalpog'iston";
-  if (b.includes('xorazm') || b.includes('urganch')) return "Xorazm";
-  if (b.includes('navoiy') || b.includes('zarafshon')) return "Navoiy";
-  if (b.includes('buxoro') || b.includes("qorako'l") || b.includes("g'ijduvon")) return "Buxoro";
-  if (b.includes('samarqand') || b.includes('urgut')) return "Samarqand";
-  if (b.includes('qashqadaryo') || b.includes('shahrisabz')) return "Qashqadaryo";
-  if (b.includes('surxondaryo') || b.includes('denov')) return "Surxondaryo";
-  if (b.includes('jizzax')) return "Jizzax";
-  if (b.includes('sirdaryo') || b.includes('guliston')) return "Sirdaryo";
-  if (b.includes('toshkent v') || b.includes('zangiota')) return "Toshkent viloyati";
-  if (b.includes('namangan') || b.includes('chust')) return "Namangan";
-  if (b.includes("farg'ona") || b.includes("marg'ilon")) return "Farg'ona";
-  if (b.includes('andijon') || b.includes('asaka')) return "Andijon";
-  return "Toshkent shahri"; 
+// --- XATONI TO'G'RILOVCHI: QAT'IY NORMALIZATOR ---
+const normalizeRegion = (regionStr: string, branchStr: string) => {
+  const combined = `${regionStr || ''} ${branchStr || ''}`.toLowerCase();
+  
+  if (combined.includes('qoraqalpoq')) return "Qoraqalpog'iston";
+  if (combined.includes('xorazm') || combined.includes('urganch')) return "Xorazm";
+  if (combined.includes('navoiy') || combined.includes('zarafshon')) return "Navoiy";
+  if (combined.includes('buxoro') || combined.includes("qorako'l") || combined.includes("g'ijduvon")) return "Buxoro";
+  if (combined.includes('samarqand') || combined.includes('urgut')) return "Samarqand";
+  if (combined.includes('qashqadaryo') || combined.includes('shahrisabz')) return "Qashqadaryo";
+  if (combined.includes('surxondaryo') || combined.includes('denov')) return "Surxondaryo";
+  if (combined.includes('jizzax')) return "Jizzax";
+  if (combined.includes('sirdaryo') || combined.includes('guliston')) return "Sirdaryo";
+  if (combined.includes('toshkent v') || combined.includes('zangiota') || combined.includes('toshkent viloyati')) return "Toshkent viloyati";
+  if (combined.includes('namangan') || combined.includes('chust')) return "Namangan";
+  if (combined.includes("farg'ona") || combined.includes("marg'ilon")) return "Farg'ona";
+  if (combined.includes('andijon') || combined.includes('asaka')) return "Andijon";
+  
+  return "Toshkent shahri"; // Qolgan barcha tushunarsiz holatlar avtomat Toshkent shahriga o'tadi
 };
 
 const getStatusConfig = (risk: number) => {
@@ -115,7 +118,6 @@ export default function AdminDashboard() {
       if (activeCamp) {
         setSelectedCampaignId(activeCamp._id);
       }
-
     } catch (error) {
       console.error("Ma'lumotlarni yuklashda xatolik:", error);
     } finally {
@@ -130,17 +132,14 @@ export default function AdminDashboard() {
   }, [selectedCampaignId, rawUsers, rawDeclarations, isLoading]);
 
   const calculateDashboardData = () => {
-    // 1. ASOSIY QAT'IY QOIDA: Jami xodimlar roppa-rosa users bazasi uzunligiga teng.
     const totalUsersCount = rawUsers.length;
 
-    // 2. FAQAT "Yillik deklaratsiya"larni ajratib olamiz (Rotatsiya va Yangi xodim kirmaydi!)
     let filteredDeclarations = rawDeclarations.filter((decl: any) => {
       const isDeclaration = !!decl.personalInfo; 
       const isYillik = !decl.type || decl.type === 'yillik'; 
       return isDeclaration && isYillik;
     });
 
-    // 3. Muddatga (Campaign) ko'ra qat'iy saralash
     if (selectedCampaignId !== 'all') {
       filteredDeclarations = filteredDeclarations.filter(decl => {
         if (decl.campaignId) {
@@ -160,6 +159,7 @@ export default function AdminDashboard() {
     const branchMap: any = {};
     const regionMap: any = {};
 
+    // Xarita bazasini xatosiz shakllantirish
     baseMapCoords.forEach(c => {
       regionMap[c.name] = { 
         ...c, 
@@ -168,20 +168,15 @@ export default function AdminDashboard() {
         totalUsers: 0, 
         dangerousCount: 0, 
         uniqueSubmitters: new Set(),
-        branches: [] // Filiallarni hudud ichiga saqlash uchun yangi joy
+        branches: [] 
       };
     });
 
-    // Foydalanuvchilarni o'z filial va hududiga taqsimlaymiz
+    // 1. FOYDALANUVCHILAR (Barcha xodimlar qayerdaligini aniqlash)
     rawUsers.forEach((u: any) => {
-      const branchName = u.branch || "Noma'lum filial";
-      // Registrationdan olingan hududni aniq ishlatamiz (bo'lmasa fallback)
-      const regionName = u.region || getRegionName(branchName); 
-
-      // Agar map ichida bunday region yo'q bo'lsa (misol eski bazada xato yozilgan bo'lsa) standartga qo'shamiz
-      if (!regionMap[regionName] && regionMap["Toshkent shahri"]) {
-        regionMap[regionName] = { ...regionMap["Toshkent shahri"], name: regionName, totalUsers: 0, uniqueSubmitters: new Set(), branches: [] };
-      }
+      const branchName = (u.branch || "Noma'lum filial").trim();
+      // Filial va viloyatni qat'iy normallashtiramiz
+      const regionName = normalizeRegion(u.region, branchName); 
 
       if (regionMap[regionName]) {
         regionMap[regionName].totalUsers += 1;
@@ -189,7 +184,6 @@ export default function AdminDashboard() {
 
       if (!branchMap[branchName]) {
         branchMap[branchName] = {
-          id: Object.keys(branchMap).length + 1,
           name: branchName,
           region: regionName,
           employees: 0, 
@@ -205,16 +199,16 @@ export default function AdminDashboard() {
     let highRiskCountGlobal = 0;
     const globalUniqueSubmitters = new Set();
 
-    // Deklaratsiyalarni tahlil qilish
+    // 2. DEKLARATSIYALARNI TAHLIL QILISH
     filteredDeclarations.forEach((decl: any) => {
-      const branchName = decl.personalInfo?.branch || decl.branch || "Noma'lum filial";
-      const regionName = decl.personalInfo?.region || decl.region || getRegionName(branchName);
+      const branchName = (decl.personalInfo?.branch || decl.branch || "Noma'lum filial").trim();
+      const rawRegion = decl.personalInfo?.region || decl.region;
+      // Qat'iy normallashtiramiz
+      const regionName = normalizeRegion(rawRegion, branchName);
       
       const identifier = decl.userEmail || decl.personalInfo?.fullName || decl.personalInfo?.passport || "NoName";
       
-      if (globalUniqueSubmitters.has(identifier) && identifier !== "NoName") {
-         return; 
-      }
+      if (globalUniqueSubmitters.has(identifier) && identifier !== "NoName") return; 
       globalUniqueSubmitters.add(identifier);
 
       let score = 0;
@@ -236,12 +230,12 @@ export default function AdminDashboard() {
       if (score > 100) score = 100;
       if (score >= 60) highRiskCountGlobal++;
 
+      // Agar xodim bazada umuman yo'q bo'lsa (yangi), filial qo'shamiz
       if (!branchMap[branchName]) {
         branchMap[branchName] = {
-          id: Object.keys(branchMap).length + 1,
           name: branchName,
           region: regionName,
-          employees: 0, 
+          employees: 0, // 0 chunki bazada yo'q edi
           scoreSum: 0,
           rawSubmitted: 0,
           reasons: new Set(),
@@ -252,10 +246,12 @@ export default function AdminDashboard() {
       branchMap[branchName].uniqueSubmitters.add(identifier);
       branchMap[branchName].rawSubmitted += 1;
       branchMap[branchName].scoreSum += score;
+      
       if (score >= 25) {
         reasons.filter(r => r !== "Xavf aniqlanmadi").forEach(r => branchMap[branchName].reasons.add(r));
       }
 
+      // Xodim ma'lumotlarini o'zgaruvchisiz, 1 ta aniq viloyatga joylaymiz
       if (regionMap[regionName]) {
         regionMap[regionName].uniqueSubmitters.add(identifier);
         regionMap[regionName].rawSubmitted += 1;
@@ -264,25 +260,32 @@ export default function AdminDashboard() {
       }
     });
 
-    const finalBranches = Object.values(branchMap).map((b: any) => {
-      const submitted = Math.min(b.uniqueSubmitters.size, b.employees > 0 ? b.employees : b.uniqueSubmitters.size);
+    // 3. NATIJALARNI SHAKLLANTIRISH
+    const finalBranches = Object.values(branchMap).map((b: any, idx) => {
+      // 1/0 xatoligini to'g'rilash (topshirganlar soni jami xodimlardan oshib keta olmaydi)
+      const exactSubmitted = b.uniqueSubmitters.size;
+      const exactEmployees = Math.max(b.employees, exactSubmitted);
       const avgScore = b.rawSubmitted > 0 ? Math.round(b.scoreSum / b.rawSubmitted) : 0;
+      
       return {
         ...b,
-        submitted: submitted,
+        id: `branch-${idx}`,
+        employees: exactEmployees,
+        submitted: exactSubmitted,
         score: avgScore,
         risk: avgScore >= 60 ? 'Qizil' : avgScore >= 25 ? 'Sariq' : 'Yashil',
         reason: b.reasons.size > 0 ? Array.from(b.reasons).join('; ') : "Xavf aniqlanmadi"
       };
     });
 
-    // Filiallarni o'z viloyati ichiga joylash
-    finalBranches.forEach(b => {
+    // Filiallarni viloyat obyekti ichiga push qilish
+    finalBranches.forEach((b: any) => {
       if (regionMap[b.region]) {
         regionMap[b.region].branches.push(b);
       }
     });
 
+    // Xarita uchun ma'lumot
     const finalMap = Object.values(regionMap).map((r: any) => ({
       id: r.id,
       name: r.name,
@@ -291,20 +294,22 @@ export default function AdminDashboard() {
       risk: r.rawSubmitted > 0 ? Math.round(r.riskSum / r.rawSubmitted) : 0
     }));
 
-    // Barcha regionlarni olamiz (faqat top 4 ta emas) va filiallarni sortlaymiz
+    // Progress chart va akkordeon uchun ma'lumot
     const finalProgress = Object.values(regionMap)
       .filter((r: any) => r.totalUsers > 0 || r.uniqueSubmitters.size > 0)
       .map((r: any) => {
-        const submitted = Math.min(r.uniqueSubmitters.size, r.totalUsers > 0 ? r.totalUsers : r.uniqueSubmitters.size);
+        const exactSubmitted = r.uniqueSubmitters.size;
+        const exactTotal = Math.max(r.totalUsers, exactSubmitted); // 1/0 xatosi uchun
+        
         return {
-          id: r.id,
+          id: `region-${r.id}`,
           name: r.name,
-          total: r.totalUsers,
-          submitted: submitted,
+          total: exactTotal,
+          submitted: exactSubmitted,
           branches: r.branches.sort((a:any, b:any) => b.employees - a.employees)
         };
       })
-      .sort((a, b) => b.total - a.total); // Odam soni bo'yicha eng yirik viloyatlar birinchi chiqadi
+      .sort((a, b) => b.total - a.total);
 
     let mostDangerous = { name: "Hozircha xavfsiz", risk: 0, total: 0, dangerous: 0 };
     Object.values(regionMap).forEach((r: any) => {
@@ -385,7 +390,6 @@ export default function AdminDashboard() {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* 1. Lavozim */}
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-blue-500"></div>
                   <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><User className="w-4 h-4 text-blue-600"/> 1. Lavozim va Bo'lim Sezuvchanligi</h3>
@@ -396,7 +400,6 @@ export default function AdminDashboard() {
                   </ul>
                 </div>
 
-                {/* 2. Nepotizm */}
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
                   <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Users className="w-4 h-4 text-indigo-600"/> 2. Nepotizm (Qarindoshlik urug'lari)</h3>
@@ -407,7 +410,6 @@ export default function AdminDashboard() {
                   </ul>
                 </div>
 
-                {/* 3. Tijorat */}
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-amber-500"></div>
                   <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Building2 className="w-4 h-4 text-amber-600"/> 3. Tijorat va Biznes Manfaatlari</h3>
@@ -418,7 +420,6 @@ export default function AdminDashboard() {
                   </ul>
                 </div>
 
-                {/* 4. NLP */}
                 <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-purple-500"></div>
                   <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><Zap className="w-4 h-4 text-purple-600"/> 4. O'z-o'zini fosh qilish (NLP Trigger)</h3>
@@ -428,7 +429,6 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Xulosalar */}
               <div className="bg-[#0A2540] p-5 rounded-xl shadow-inner text-white mt-4">
                 <h3 className="font-bold text-lg mb-4 text-blue-200">Algoritm Xulosasi:</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -466,8 +466,10 @@ export default function AdminDashboard() {
           <Link href="/admin/declarations" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileText className="w-5 h-5" /> Deklaratsiyalar
           </Link>
-          <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
-            <ShieldAlert className="w-5 h-5" /> Xabarnomalar
+                    <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 rounded-lg font-bold transition-colors flex-justify-between">
+            <div className="flex items-center gap-3">
+              <ShieldAlert className="w-5 h-5" /> Xabarnomalar
+            </div>
           </Link>
           <Link href="/admin/campaigns" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <Calendar className="w-5 h-5" /> Muddatlarni sozlash

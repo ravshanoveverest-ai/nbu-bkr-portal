@@ -9,9 +9,6 @@ import {
 } from 'lucide-react';
 
 
-
-    
-
 export default function CampaignsPage() {
   // Boshlang'ich holatda ro'yxat bo'm-bo'sh turadi (statik ma'lumotlar yo'q)
   const [campaigns, setCampaigns] = useState<any[]>([]);
@@ -180,11 +177,10 @@ export default function CampaignsPage() {
           <Link href="/admin/declarations" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileText className="w-5 h-5" /> Deklaratsiyalar
           </Link>
-          <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors justify-between">
+                    <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 rounded-lg font-bold transition-colors flex-justify-between">
             <div className="flex items-center gap-3">
               <ShieldAlert className="w-5 h-5" /> Xabarnomalar
             </div>
-            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">3</span>
           </Link>
           <Link href="/admin/campaigns" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 rounded-lg font-medium transition-colors">
             <Calendar className="w-5 h-5" /> Muddatlarni sozlash

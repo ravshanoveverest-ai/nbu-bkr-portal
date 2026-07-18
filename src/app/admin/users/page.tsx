@@ -121,7 +121,7 @@ export default function UsersPage() {
           <Link href="/admin/declarations" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <FileText className="w-5 h-5" /> Deklaratsiyalar
           </Link>
-          <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors justify-between">
+                    <Link href="/admin/notifications" className="flex items-center gap-3 px-3 py-2.5 bg-blue-600/10 text-blue-400 rounded-lg font-bold transition-colors flex-justify-between">
             <div className="flex items-center gap-3">
               <ShieldAlert className="w-5 h-5" /> Xabarnomalar
             </div>
