@@ -53,13 +53,24 @@ export default function DeclarationPage() {
   const pinflRegex = /^\d{14}$/;
   const stirRegex = /^\d{9}$/;
 
-  // Tizimga kirgan xodimning emailini olish va Turini aniqlash
+  // Tizimga kirgan xodimning emailini olish va Turini aniqlash + AVTOTOLDIRISH
   useEffect(() => {
-    // 1. Emailni olish
+    // 1. Email va Ro'yxatdan o'tgandagi ma'lumotlarni olish
     const userInfoString = localStorage.getItem('user_info');
     if (userInfoString) {
       const parsedUser = JSON.parse(userInfoString);
       setUserEmail(parsedUser.email || '');
+      
+      // AVTOMAT TO'LDIRISH (F.I.Sh, Filial, Lavozim) - SIZDAGI ISHLAYOTGAN VERSIYA
+      setFormData(prev => ({
+        ...prev,
+        personal: {
+          ...prev.personal,
+          fullName: parsedUser.fullName || '',
+          branch: parsedUser.branch ? `${parsedUser.region || ''} ${parsedUser.branch}`.trim() : '',
+          position: parsedUser.position || ''
+        }
+      }));
     }
 
     // 2. URL dan turni aniqlash (?type=rotatsiya)
@@ -194,31 +205,53 @@ export default function DeclarationPage() {
     }
   };
 
+  // === BU QISM TO'G'RILANDI: ENG OXIRGI DEKLARATSIYANI TOPISH ===
   const handleAutofill = async () => {
     if (!userEmail) return;
     try {
-      const res = await fetch(`https://nbu-bkr-api.onrender.com/api/declarations/my?email=${userEmail}`);
-      if (res.status === 404) {
+      // 1. API dan BARCHA deklaratsiyalarni olib kelamiz
+      const res = await fetch(`https://nbu-bkr-api.onrender.com/api/declarations`);
+      if (!res.ok) {
+        alert("Ma'lumotlarni yuklashda xatolik yuz berdi!");
+        return;
+      }
+      
+      const allDeclarations = await res.json();
+      
+      // 2. Faqat hozirgi foydalanuvchiga tegishlilarini ajratamiz
+      const myDeclarations = allDeclarations.filter((d: any) => d.userEmail === userEmail);
+      
+      if (myDeclarations.length === 0) {
         alert("Siz avval deklaratsiya to'ldirmagansiz!");
         return;
       }
-      const data = await res.json();
-      if (res.ok) {
-        setFormData({
-          personal: data.personalInfo || formData.personal,
-          relatives: data.relatives || [],
-          myCompanies: data.myCompanies || [],
-          relativeCompanies: data.relativeCompanies || [],
-          conflictInfo: data.conflictInfo || '',
-          additionalInfo: data.additionalInfo || ''
-        });
-        setIsAutofilled(true);
-        alert("Oldingi ma'lumotlaringiz muvaffaqiyatli yuklandi!");
-      }
+
+      // 3. Yaratilgan sanasi bo'yicha eng yangisini (oxirgisini) topamiz
+      myDeclarations.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const latestData = myDeclarations[0];
+
+      // 4. Formaga yozamiz (Ism, filial, lavozimlar O'ZGARMASLIGI uchun prev ishlatiladi)
+      setFormData(prev => ({
+        personal: {
+          ...prev.personal, // Ism, Filial va Lavozim oldingi holicha saqlanadi
+          passport: latestData.personalInfo?.passport || '',
+          passportDate: latestData.personalInfo?.passportDate || '',
+          pinfl: latestData.personalInfo?.pinfl || ''
+        },
+        relatives: latestData.relatives || [],
+        myCompanies: latestData.myCompanies || [],
+        relativeCompanies: latestData.relativeCompanies || [],
+        conflictInfo: latestData.conflictInfo || '',
+        additionalInfo: latestData.additionalInfo || ''
+      }));
+      
+      setIsAutofilled(true);
+      alert("Oldingi (eng so'nggi) ma'lumotlaringiz muvaffaqiyatli yuklandi!");
     } catch (error) {
       console.error("Ma'lumotlarni yuklashda xatolik:", error);
     }
   };
+  // ===============================================================
 
   // === MA'LUMOTLARNI BAZAGA SAQLASH (POST) ===
   const handleSubmit = async (e: React.FormEvent) => {
