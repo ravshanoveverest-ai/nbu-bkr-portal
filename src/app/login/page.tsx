@@ -2,19 +2,18 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
-  Lock, Mail, AlertCircle, ArrowRight, User, 
-  KeyRound, CheckCircle, X, ShieldCheck, Eye, EyeOff
+  Lock, Mail, AlertCircle, ArrowRight, 
+  KeyRound, CheckCircle, X, Eye, EyeOff, Building2
 } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
   
-  // Asosiy formalar state'i
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  // Login formasi state'lari
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -30,65 +29,43 @@ export default function LoginPage() {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
-  // === HAQIQIY BACKENDGA ULANISH (API KONTROLLERLAR) ===
   const API_URL = 'https://nbu-bkr-api.onrender.com/api/auth';
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
     setSuccess('');
 
     try {
-      if (authMode === 'register') {
-        if (password.length < 6) {
-          throw new Error("Parol kamida 6 ta belgidan iborat bo'lishi kerak.");
+      const res = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || "Email yoki parol xato");
+
+      // Token va ma'lumotlarni saqlash
+      localStorage.setItem('bkr_token', data.token);
+      localStorage.setItem('user_info', JSON.stringify({ 
+        fullName: data.fullName, 
+        email: data.email, 
+        role: data.role,
+        branch: data.branch,
+        position: data.position
+      }));
+
+      setSuccess("Tizimga kirilmoqda...");
+      
+      setTimeout(() => {
+        if (data.role === 'admin' || email.includes('admin@nbu.uz')) {
+          router.push('/admin'); 
+        } else {
+          router.push('/dashboard'); 
         }
-
-        // BACKEND: Register API chaqiruvi
-        const res = await fetch(`${API_URL}/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fullName, email, password }),
-        });
-        
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Xatolik yuz berdi");
-
-        setSuccess("Muvaffaqiyatli ro'yxatdan o'tdingiz! Tizimga kiring.");
-        setAuthMode('login');
-        setPassword('');
-        
-      } else {
-        // BACKEND: Login API chaqiruvi
-        const res = await fetch(`${API_URL}/login`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.message || "Email yoki parol xato");
-
-        // Tokenni saqlash (Sessiya)
-        localStorage.setItem('bkr_token', data.token);
-        localStorage.setItem('user_info', JSON.stringify({ 
-          fullName: data.fullName, 
-          email: data.email, 
-          role: data.role 
-        }));
-
-        setSuccess("Tizimga kirilmoqda...");
-        
-        // Muvaffaqiyatli bo'lsa yo'naltirish
-        setTimeout(() => {
-          if (data.role === 'admin' || email.includes('admin@nbu.uz')) {
-            router.push('/admin'); 
-          } else {
-            router.push('/dashboard'); 
-          }
-        }, 1000);
-      }
+      }, 1000);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -124,7 +101,6 @@ export default function LoginPage() {
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    // Validatsiya qismi (asl tasdiqlash backendda newPassword bilan yuborganda bo'ladi)
     if (resetCode.length === 6) { 
       setForgotStep(3); 
     } else {
@@ -160,7 +136,6 @@ export default function LoginPage() {
       setShowNewPassword(false);
       setShowConfirmPassword(false);
       setSuccess("Parolingiz muvaffaqiyatli yangilandi! Tizimga kirishingiz mumkin.");
-      setAuthMode('login');
       setEmail(resetEmail); 
       setPassword('');
 
@@ -172,12 +147,10 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center py-12 sm:px-6 lg:px-8 relative overflow-hidden font-sans">
+    <div className="min-h-screen bg-[#F1F5F9] font-sans relative flex flex-col items-center">
       
-      {/* ORQA FON BEZAKLARI */}
-      <div className="absolute top-0 left-0 w-full h-[40vh] bg-[#0A2540]"></div>
-      <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-blue-600/20 blur-3xl"></div>
-      
+      <div className="absolute top-0 left-0 w-full h-[40vh] bg-[#0A2540] z-0"></div>
+
       {/* PAROLNI TIKLASH MODALI */}
       {showForgotModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in">
@@ -254,7 +227,7 @@ export default function LoginPage() {
               </form>
             )}
 
-            {/* 3-BOSQICH: YANGI PAROL (Ko'zcha bilan) */}
+            {/* 3-BOSQICH: YANGI PAROL */}
             {forgotStep === 3 && (
               <form onSubmit={handleSaveNewPassword} className="space-y-4">
                 <div>
@@ -306,59 +279,38 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* HEADER LOGO QISMI */}
-      <div className="sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="flex justify-center mb-6">
-          <div className="bg-white p-3 rounded-2xl shadow-xl shadow-black/10 flex items-center justify-center w-24 h-24">
-             <img src="/nbu-logo.png" alt="NBU Logo" className="w-full h-full object-contain" />
+      {/* ASOSIY KONTENT */}
+      <div className="z-10 w-full max-w-[500px] mt-16 px-4 flex flex-col items-center">
+        
+        {/* Logo va Sarlavha */}
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center shadow-lg mb-4 p-2 overflow-hidden">
+             <div className="text-[#0A2540] font-black text-2xl flex flex-col items-center leading-none">
+                <Building2 className="w-8 h-8 mb-1" />
+                <span className="text-[10px]">O'ZMILLIYBANK</span>
+             </div>
           </div>
+          <h1 className="text-3xl font-extrabold text-white mb-2">"O'zmilliybank" AJ Portali</h1>
+          <p className="text-blue-200 text-sm font-medium">Xodimlar uchun yagona korporativ tizim</p>
         </div>
-        <h2 className="mt-2 text-center text-3xl font-extrabold text-white tracking-tight">
-          "O‘zmilliybank" AJ Portali
-        </h2>
-        <p className="mt-2 text-center text-sm text-blue-200">
-          Xodimlar uchun yagona korporativ tizim
-        </p>
-      </div>
 
-      {/* ASOSIY FORMA */}
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md relative z-10">
-        <div className="bg-white py-8 px-4 shadow-2xl sm:rounded-2xl sm:px-10 border border-slate-100">
+        {/* Login formasi (Karta) */}
+        <div className="bg-white rounded-2xl shadow-xl w-full p-8 border border-slate-100">
           
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in zoom-in duration-300">
+            <div className="mb-6 p-3 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-bold flex items-center gap-2 animate-in fade-in zoom-in duration-300">
               <AlertCircle className="w-5 h-5 shrink-0" /> {error}
             </div>
           )}
 
           {success && (
-            <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 animate-in fade-in zoom-in duration-300">
+            <div className="mb-6 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl text-sm font-bold flex items-center gap-2 animate-in fade-in zoom-in duration-300">
               <CheckCircle className="w-5 h-5 shrink-0" /> {success}
             </div>
           )}
 
-          <form className="space-y-5" onSubmit={handleAuth}>
+          <form className="space-y-5" onSubmit={handleLogin}>
             
-            {/* RO'YXATDAN O'TISH UCHUN F.I.SH */}
-            {authMode === 'register' && (
-              <div className="animate-in fade-in slide-in-from-top-2">
-                <label className="block text-sm font-bold text-slate-700 mb-2">F.I.Sh</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <User className="h-5 w-5 text-slate-400" />
-                  </div>
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    className="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-600 sm:text-sm font-medium text-slate-900 transition-shadow"
-                    placeholder="To'liq ism-sharifingiz"
-                  />
-                </div>
-              </div>
-            )}
-
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-2">Korporativ Email</label>
               <div className="relative">
@@ -379,15 +331,13 @@ export default function LoginPage() {
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="block text-sm font-bold text-slate-700">Parol</label>
-                {authMode === 'login' && (
-                  <button 
-                    type="button" 
-                    onClick={() => setShowForgotModal(true)}
-                    className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
-                  >
-                    Parolni unutdingizmi?
-                  </button>
-                )}
+                <button 
+                  type="button" 
+                  onClick={() => setShowForgotModal(true)}
+                  className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors"
+                >
+                  Parolni unutdingizmi?
+                </button>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -415,32 +365,22 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-[#0A2540] hover:bg-[#113559] focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A2540] disabled:opacity-70 transition-colors"
+                className="w-full flex justify-center items-center gap-2 py-3 px-4 border border-transparent rounded-xl shadow-lg text-sm font-bold text-white bg-[#0A2540] hover:bg-[#113559] hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-[#0A2540] disabled:opacity-70 transition-all"
               >
-                {isLoading ? 'Iltimos kuting...' : (authMode === 'login' ? 'Tizimga kirish' : "Ro'yxatdan o'tish")}
-                {!isLoading && authMode === 'login' && <ArrowRight className="w-4 h-4" />}
-                {!isLoading && authMode === 'register' && <ShieldCheck className="w-4 h-4" />}
+                {isLoading ? 'Iltimos kuting...' : 'Tizimga kirish'}
+                {!isLoading && <ArrowRight className="w-4 h-4" />}
               </button>
             </div>
           </form>
 
-          {/* SAHIFA O'ZGARISHLARI (LOGIN <-> REGISTER) */}
-          <div className="mt-6 text-center">
-            {authMode === 'login' ? (
-              <p className="text-sm text-slate-600">
-                Akkauntingiz yo'qmi?{' '}
-                <button onClick={() => {setAuthMode('register'); setError(''); setSuccess('');}} className="font-bold text-blue-600 hover:underline transition-all">
-                  Ro'yxatdan o'tish
-                </button>
-              </p>
-            ) : (
-              <p className="text-sm text-slate-600">
-                Akkauntingiz bormi?{' '}
-                <button onClick={() => {setAuthMode('login'); setError(''); setSuccess('');}} className="font-bold text-blue-600 hover:underline transition-all">
-                  Tizimga kirish
-                </button>
-              </p>
-            )}
+          {/* SAHIFA O'TISHI (LOGIN -> REGISTER) */}
+          <div className="mt-8 text-center border-t border-slate-100 pt-6">
+            <p className="text-sm font-medium text-slate-500">
+              Akkauntingiz yo'qmi?{' '}
+              <Link href="/register" className="font-bold text-blue-600 hover:underline transition-all">
+                Ro'yxatdan o'tish
+              </Link>
+            </p>
           </div>
 
         </div>

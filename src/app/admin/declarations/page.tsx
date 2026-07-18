@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   Settings, LogOut, Search, Download, FileBarChart, 
-  CheckSquare
+  CheckSquare, Filter, UserX, MapPin, Building2
 } from 'lucide-react';
 
 // EXCEL VA WORD UCHUN KUTUBXONALAR
@@ -15,7 +15,74 @@ import PizZip from 'pizzip';
 import Docxtemplater from 'docxtemplater';
 const ImageModule = require('docxtemplater-image-module-free');
 
-// Imzoni Base64 dan ArrayBuffer ga o'girish (Wordga rasm qo'yish uchun)
+// ==========================================
+// 1. HUDUDLAR VA FILIALLAR BAZASI (Doimiy)
+// ==========================================
+const NBU_REGIONS: Record<string, string[]> = {
+  "Toshkent shahri": [
+    "Bosh amaliyot BXM", "Sebzor amaliyot BXM", "Markaziy amaliyot BXM", "Akademiya BXM",
+    "Uchtepa BXM", "Bektemir BXM", "Sayohat BXM", "Mirzo Ulug‘bek BXM", "Olmazor BXM",
+    "Yashnobod BXM", "Yunusobod BXM", "Yakkasaroy BXM", "Yangiobod BXM", "Sergeli BXM",
+    "Mirobod bo'limi", "Yangi Sergeli BXO", "Humo BXO", "Shayhontoxur BXO", "Navro‘z BXO",
+    "Atlas NBU BXO", "Texnopark BXO", "Abu Saxiy BXO", "Mirobod plaza BXO", "G‘alaba BXO",
+    "\"City\" BXO"
+  ],
+  "Andijon viloyati": [
+    "Andijon amaliyot BXM", "Asaka BXM", "Marxamat BXM", "Izboskan BXM", "Paxtaobod BXO", 
+    "Qo‘rg‘ontepa BXO", "Shahrixon BXO", "Boburmirzo BXO"
+  ],
+  "Buxoro viloyati": [
+    "Buxoro amaliyot BXM", "G‘ijduvon BXM", "Kogon BXM", "Qorako‘l BXM", "Romitan BXO", 
+    "Qorovulbozor BXO", "Vobkent BXO", "Shofirkon BXO", "Ark BXO", "Naqshband BXO", 
+    "Buxoro shahar BXO", "Mirkulol BXO"
+  ],
+  "Farg'ona viloyati": [
+    "Farg‘ona amaliyot BXM", "Quva BXM", "Qo‘qon BXM", "Rishton BXM", "Beshariq BXM", 
+    "Quvasoy BXO", "Buvayda BXO", "Marg‘ilon BXO", "Oltiariq BXO"
+  ],
+  "Jizzax viloyati": [
+    "Jizzax amaliyot BXM", "Mirzacho‘l BXM", "Industrial BXM", "Paxtakor BXO"
+  ],
+  "Namangan viloyati": [
+    "Namangan amaliyot BXM", "Uychi BXM", "Uchqo‘rg‘on BXM", "Chortoq BXM", 
+    "To‘raqo‘rg‘on BXO", "Kosonsoy BXO", "Chust BXO", "Sardoba BXO"
+  ],
+  "Navoiy viloyati": [
+    "Navoiy amaliyot BXM", "Zarafshon BXM", "Qiziltepa BXM", "Uchquduq BXM", 
+    "Malikrabot BXO", "Nurota BXO", "Yoshlik BXO", "Oltin vodiy BXO", "Xalqlar do‘stligi BXO"
+  ],
+  "Qashqadaryo viloyati": [
+    "Qarshi amaliyot BXM", "Shahrisabz BXM", "G‘uzor BXO", "Muborak BXO", 
+    "Yangi-nishon BXO", "Nasaf BXO"
+  ],
+  "Qoraqalpog'iston Respublikasi": [
+    "Qo‘ng‘irot BXM", "To‘rtko‘l BXM", "Nukus amaliyot BXM", "Xo‘jayli BXO", 
+    "Chimboy BXO", "Mang‘it BXO", "Nurli yo‘l BXO"
+  ],
+  "Samarqand viloyati": [
+    "Samarqand amaliyot BXM", "Jomboy BXM", "Pastdarg‘om BXM", "Urgut BXM", 
+    "Registon BXM", "Nurobod BXO", "Bulung‘ur BXO", "Kattaqo‘rg‘on BXO", "Zarmitan BXO", 
+    "Qorasuv BXO", "Tadbirkor BXO", "Payariq BXO", "Tayloq BXO", "Do‘stlik BXO"
+  ],
+  "Sirdaryo viloyati": [
+    "Guliston amaliyot BXM", "Oqoltin BXO"
+  ],
+  "Surxondaryo viloyati": [
+    "Termiz amaliyot BXM", "Qumqo‘rg‘on BXM", "Denov BXM", "Sherobod BXO", 
+    "Jarqo‘rg‘on BXO", "Ayritom BXO", "Sangardak BXO"
+  ],
+  "Toshkent viloyati": [
+    "Nurafshon amaliyot BXM", "Angren BXM", "Bekobod BXM", "Yangiyo‘l BXM", 
+    "G‘azalkent BXO", "Olmaliq BXO", "Chirchiq BXO", "Metallurg BXO", "Zarhal BXO", 
+    "Oydin BXO", "Zangiota BXO", "Toshkent viloyati BXO"
+  ],
+  "Xorazm viloyati": [
+    "Xorazm amaliyot BXM", "Hazorasp BXM", "Xonqa BXO", "Shovot BXM", "Yangiariq BXO", 
+    "Karvon BXO", "Gurlan BXO", "Xiva BXO", "Qo‘shko‘pir BXO"
+  ]
+};
+
+// Imzoni Base64 dan ArrayBuffer ga o'girish
 function base64DataURLToArrayBuffer(dataURL: string) {
   const base64Regex = /^data:image\/(png|jpg|jpeg|svg|svg\+xml);base64,/;
   if (!base64Regex.test(dataURL)) return false;
@@ -43,6 +110,15 @@ export default function DeclarationsPage() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+
+  // === HUDUD VA FILIAL FILTRLARI UCHUN STATELAR ===
+  const [selectedRegion, setSelectedRegion] = useState('all');
+  const [selectedBranch, setSelectedBranch] = useState('all');
+
+  // Agar viloyat o'zgarsa, filialni "all" ga tushirib qoyamiz
+  useEffect(() => {
+    setSelectedBranch('all');
+  }, [selectedRegion]);
 
   const adminName = "Hasan Turaevich";
   const adminRole = "BKR Boshlig'i";
@@ -77,6 +153,7 @@ export default function DeclarationsPage() {
     }
   };
 
+  // Faqat topshirganlarni ajratib olamiz (Jadval uchun)
   const filteredDeclarations = allDeclarations.filter(decl => {
     if (decl.type && decl.type !== selectedTab) return false;
     if (selectedTab === 'yillik' && selectedCampaignId && decl.campaignId !== selectedCampaignId) return false;
@@ -86,51 +163,115 @@ export default function DeclarationsPage() {
     return true;
   });
 
+  // Topshirmaganlarni aniqlash (Aynan tanlangan muddat bo'yicha)
+  const currentCampaignDeclarations = allDeclarations.filter(decl => {
+    if (decl.type && decl.type !== selectedTab) return false;
+    if (selectedTab === 'yillik' && selectedCampaignId && decl.campaignId !== selectedCampaignId) return false;
+    return true;
+  });
+
+  const submittedEmails = new Set(currentCampaignDeclarations.map(d => d.userEmail));
+  
+  // === MURAKKAB FILTRATSIYA (Viloyat va BXM kesimida) ===
+  const unsubmittedUsers = users.filter(u => {
+    const hasNotSubmitted = !submittedEmails.has(u.email);
+
+    // Viloyat filtri
+    let matchesRegion = true;
+    if (selectedRegion !== 'all') {
+      const allowedBranches = NBU_REGIONS[selectedRegion] || [];
+      matchesRegion = allowedBranches.includes(u.branch);
+    }
+
+    // Aniq filial filtri
+    let matchesBranch = true;
+    if (selectedBranch !== 'all') {
+      matchesBranch = u.branch === selectedBranch;
+    }
+
+    return hasNotSubmitted && matchesRegion && matchesBranch;
+  });
+
   const totalUsers = users.length;
-  const submittedCount = filteredDeclarations.length;
+  const submittedCount = currentCampaignDeclarations.length; 
   const percentage = totalUsers > 0 ? ((submittedCount / totalUsers) * 100).toFixed(1) : '0.0';
 
-  // === EXCEL GENERATSIYASI (Chiroyli dizayn bilan) ===
+  // === EXCEL GENERATSIYASI (TOPSHIRGANLAR UCHUN) ===
   const handleExportExcel = async () => {
     if (filteredDeclarations.length === 0) return alert("Yuklash uchun ma'lumot yo'q!");
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet("Deklaratsiyalar", {
-      views: [{ state: 'frozen', xSplit: 2, ySplit: 1 }] // Tepa va yon qatorni qotirib qo'yish
+    const worksheet = workbook.addWorksheet("Topshirganlar", {
+      views: [{ state: 'frozen', xSplit: 2, ySplit: 1 }]
     });
 
-    // Ustunlarni sozlash va kengliklarini berish
     worksheet.columns = [
       { header: 'ID', key: 'id', width: 5 },
       { header: 'XODIM F.I.SH', key: 'fullName', width: 30 },
-      { header: "SHAXSIY MA'LUMOTLAR\n(Pasport va JSHSHIR)", key: 'personal', width: 25 },
+      { header: "SHAXSIY MA'LUMOTLAR", key: 'personal', width: 25 },
       { header: 'HUDUD / FILIAL', key: 'branch', width: 20 },
       { header: 'TOPSHIRILGAN SANA', key: 'date', width: 18 },
       { header: 'XAVF DARAJASI', key: 'risk', width: 20 },
-      { header: 'TIZIM XULOSASI (Sabab)', key: 'riskText', width: 30 },
-      { header: "YAQIN QARINDOSHLAR HAQIDA MA'LUMOT", key: 'relatives', width: 45 },
-      { header: 'YURIDIK SHAXSLARGA ALOQADORLIK (Kompaniyalar)', key: 'companies', width: 50 },
+      { header: 'TIZIM XULOSASI', key: 'riskText', width: 30 },
     ];
 
-    // Header (Sarlavha) qatoriga dizayn berish
     const headerRow = worksheet.getRow(1);
-    headerRow.height = 35;
+    headerRow.height = 30;
     headerRow.eachCell((cell) => {
-      cell.fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF0A2540' } // To'q ko'k rang
-      };
-      cell.font = {
-        color: { argb: 'FFFFFFFF' }, // Oq matn
-        bold: true,
-        size: 10
-      };
-      cell.alignment = {
-        vertical: 'middle',
-        horizontal: 'center',
-        wrapText: true
-      };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF059669' } }; 
+      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
+    });
+
+    filteredDeclarations.forEach((decl, index) => {
+      let riskLevel = '🟢 Yashil (Toza)';
+      let riskText = 'Xavf aniqlanmadi';
+      
+      if (decl.relatives && decl.relatives.some((r:any) => r.worksAtNBU)) {
+        riskLevel = '🔴 Qizil (Xavfli)'; riskText = 'Qarindoshi NBU da ishlaydi';
+      } else if (decl.myCompanies && decl.myCompanies.length > 0) {
+        riskLevel = '🟡 Sariq (Diqqat)'; riskText = "O'zining nomida kompaniya mavjud";
+      }
+
+      worksheet.addRow({
+        id: index + 1,
+        fullName: decl.personalInfo?.fullName || "-",
+        personal: `Pasport: ${decl.personalInfo?.passport || "-"}\nJSHSHIR: ${decl.personalInfo?.pinfl || "-"}`,
+        branch: decl.personalInfo?.branch || "-",
+        date: new Date(decl.createdAt).toLocaleDateString('uz-UZ'),
+        risk: riskLevel,
+        riskText: riskText,
+      }).eachCell((cell) => { cell.alignment = { wrapText: true, vertical: 'top' }; });
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    saveAs(blob, "Topshirganlar_Reyestri.xlsx");
+  };
+
+  // === EXCEL GENERATSIYASI (TOPSHIRMAGANLAR UCHUN) ===
+  const handleExportUnsubmittedExcel = async () => {
+    if (unsubmittedUsers.length === 0) return alert("Ushbu hudud/filial bo'yicha hamma topshirgan yoki xodimlar topilmadi!");
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Topshirmaganlar", {
+      views: [{ state: 'frozen', xSplit: 1, ySplit: 1 }]
+    });
+
+    worksheet.columns = [
+      { header: 'ID', key: 'id', width: 5 },
+      { header: 'XODIM F.I.SH', key: 'fullName', width: 35 },
+      { header: 'LAVOZIM', key: 'position', width: 30 },
+      { header: 'HUDUD / FILIAL', key: 'branch', width: 30 },
+      { header: 'EMAIL / LOGIN', key: 'email', width: 25 },
+    ];
+
+    const headerRow = worksheet.getRow(1);
+    headerRow.height = 30;
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDC2626' } }; 
+      cell.font = { color: { argb: 'FFFFFFFF' }, bold: true };
+      cell.alignment = { vertical: 'middle', horizontal: 'center' };
       cell.border = {
         top: { style: 'thin', color: { argb: 'FF94A3B8' } },
         bottom: { style: 'thin', color: { argb: 'FF94A3B8' } },
@@ -139,42 +280,15 @@ export default function DeclarationsPage() {
       };
     });
 
-    // Ma'lumotlarni to'ldirish
-    filteredDeclarations.forEach((decl, index) => {
-      let riskLevel = '🟢 Yashil (Toza)';
-      let riskText = 'Xavf aniqlanmadi';
-      
-      if (decl.relatives && decl.relatives.some((r:any) => r.worksAtNBU)) {
-        riskLevel = '🔴 Qizil (Xavfli)'; 
-        riskText = 'Qarindoshi NBU da ishlaydi';
-      } else if (decl.myCompanies && decl.myCompanies.length > 0) {
-        riskLevel = '🟡 Sariq (Diqqat)'; 
-        riskText = "O'zining nomida kompaniya mavjud";
-      }
-
-      const relsStr = decl.relatives?.length > 0
-        ? decl.relatives.map((r:any, i:number) => `${i+1}. ${r.fullName} (${r.relationship})\n   ${r.worksAtNBU ? '☑ NBU da ishlaydi ('+r.nbuBranch+')' : '☒ NBU da ishlamaydi'}`).join('\n\n')
-        : 'Qarindoshlar kiritilmagan';
-
-      const myComps = decl.myCompanies?.map((c:any, i:number) => `${i+1}. Nomi: "${c.companyName}"\nSTIR: ${c.stir}\nHolati: ${c.roleInCompany} (${c.sharePercent}% ulush)\nTegishli: O'ziga`) || [];
-      const relComps = decl.relativeCompanies?.map((c:any, i:number) => `${myComps.length + i + 1}. Nomi: "${c.companyName}"\nSTIR: ${c.stir}\nHolati: ${c.roleInCompany} (${c.sharePercent}% ulush)\nTegishli: Qarindoshiga (${c.relativeName})`) || [];
-      const allCompsStr = [...myComps, ...relComps].join('\n\n') || 'Yuridik shaxslar aniqlanmadi';
-
-      const row = worksheet.addRow({
+    unsubmittedUsers.forEach((user, index) => {
+      worksheet.addRow({
         id: index + 1,
-        fullName: decl.personalInfo?.fullName || "-",
-        personal: `Pasport: ${decl.personalInfo?.passport || "-"}\nJSHSHIR: ${decl.personalInfo?.pinfl || "-"}`,
-        branch: decl.personalInfo?.branch || "-",
-        date: new Date(decl.createdAt).toLocaleDateString('uz-UZ'),
-        risk: riskLevel,
-        riskText: riskText,
-        relatives: relsStr,
-        companies: allCompsStr
-      });
-
-      // Har bir data katagiga dizayn (wrapText) berish
-      row.eachCell((cell) => {
-        cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+        fullName: user.fullName || "-",
+        position: user.position || user.role || "-",
+        branch: user.branch || "-",
+        email: user.email || "-",
+      }).eachCell((cell) => { 
+        cell.alignment = { wrapText: true, vertical: 'top' };
         cell.border = {
           top: { style: 'thin', color: { argb: 'FFCBD5E1' } },
           bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
@@ -184,98 +298,56 @@ export default function DeclarationsPage() {
       });
     });
 
-    // Faylni generatsiya qilib yuklash
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, "Deklaratsiyalar_Reyestri.xlsx");
+    
+    // Nomi chiroyli chiqishi uchun
+    const campInfo = selectedTab === 'yillik' ? "Yillik_" : selectedTab + "_";
+    const rName = selectedRegion === 'all' ? "Respublika" : selectedRegion.replace(/\s+/g, "");
+    const bName = selectedBranch === 'all' ? "" : `_${selectedBranch.replace(/\s+/g, "")}`;
+    
+    saveAs(blob, `Topshirmaganlar_${campInfo}${rName}${bName}.xlsx`);
   };
 
   // === DOCX GENERATSIYASI ===
   const handleDownloadDocx = async (decl: any) => {
     try {
       const response = await fetch('/template.docx');
-      if (!response.ok) {
-        alert("template.docx fayli public papkada topilmadi!");
-        return;
-      }
+      if (!response.ok) return alert("template.docx fayli public papkada topilmadi!");
       const content = await response.arrayBuffer();
       const zip = new PizZip(content);
 
       const imageOptions = {
         centered: true,
-        getImage: function(tagValue: any) {
-          return base64DataURLToArrayBuffer(tagValue);
-        },
-        getSize: function() {
-          return [140, 45]; 
-        }
+        getImage: function(tagValue: any) { return base64DataURLToArrayBuffer(tagValue); },
+        getSize: function() { return [140, 45]; }
       };
-      const imageModule = new ImageModule(imageOptions);
+      const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, modules: [new ImageModule(imageOptions)] });
 
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        modules: [imageModule]
-      });
-
-      const typeMap: any = {
-        'yillik': 'йиллик',
-        'rotatsiya': 'бошқа ишга ўтказилаётганда',
-        'yangi_xodim': 'ишга қабул қилинаётганда'
-      };
-      const declType = decl.type ? typeMap[decl.type] : 'йиллик';
-
-      const relativesData = decl.relatives?.length > 0 
-        ? decl.relatives.map((r: any) => ({
-            relName: r.fullName || "-",
-            relRel: r.relationship || "-",
-            relPass: r.noInfo ? "Маълумотга эга эмасман" : `${r.passport || '-'} (${r.passportDate || ''})`,
-            relPinfl: r.noInfo ? "Маълумотга эга эмасман" : (r.pinfl || "-")
-        }))
-        : [{ relName: "-", relRel: "-", relPass: "-", relPinfl: "-" }];
-
-      const myCompsData = decl.myCompanies?.length > 0
-        ? decl.myCompanies.map((c: any) => ({
-            compName: c.companyName || "-",
-            compStir: c.stir || "-"
-        }))
-        : [{ compName: "-", compStir: "-" }];
-
-      const relCompsData = decl.relativeCompanies?.length > 0
-        ? decl.relativeCompanies.map((c: any) => ({
-            relName: c.relativeName || "-",
-            compName: c.companyName || "-",
-            compStir: c.stir || "-"
-        }))
-        : [{ relName: "-", compName: "-", compStir: "-" }];
-
-      const fallbackImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
-
-      const data = {
-        declType: declType,
+      const typeMap: any = { 'yillik': 'йиллик', 'rotatsiya': 'бошқа ишга ўтказилаётганда', 'yangi_xodim': 'ишга қабул қилинаётганда' };
+      
+      doc.render({
+        declType: decl.type ? typeMap[decl.type] : 'йиллик',
         fullName: decl.personalInfo?.fullName || "-",
         branch: decl.personalInfo?.branch || "-",
         position: decl.personalInfo?.position || "-",
         passport: decl.personalInfo?.passport || "-",
         passportDate: decl.personalInfo?.passportDate || "-",
         pinfl: decl.personalInfo?.pinfl || "-",
-        
-        relatives: relativesData,
-        myComps: myCompsData,
-        relComps: relCompsData,
-
+        relatives: decl.relatives?.length ? decl.relatives.map((r: any) => ({
+            relName: r.fullName || "-", relRel: r.relationship || "-",
+            relPass: r.noInfo ? "Маълумотга эга эмасман" : `${r.passport || '-'} (${r.passportDate || ''})`,
+            relPinfl: r.noInfo ? "Маълумотга эга эмасман" : (r.pinfl || "-")
+        })) : [{ relName: "-", relRel: "-", relPass: "-", relPinfl: "-" }],
+        myComps: decl.myCompanies?.length ? decl.myCompanies.map((c: any) => ({ compName: c.companyName || "-", compStir: c.stir || "-" })) : [{ compName: "-", compStir: "-" }],
+        relComps: decl.relativeCompanies?.length ? decl.relativeCompanies.map((c: any) => ({ relName: c.relativeName || "-", compName: c.companyName || "-", compStir: c.stir || "-" })) : [{ relName: "-", compName: "-", compStir: "-" }],
         conflictInfo: decl.conflictInfo || "-",
         additionalInfo: decl.additionalInfo || "-",
         date: new Date(decl.createdAt).toLocaleDateString('uz-UZ').replace(/\//g, '.'),
-        signature: decl.signature || fallbackImage,
-      };
-
-      doc.render(data);
-
-      const out = doc.getZip().generate({
-        type: "blob",
-        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        signature: decl.signature || "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
       });
+
+      const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
       saveAs(out, `${decl.personalInfo?.fullName || 'Xodim'}_deklaratsiya.docx`);
 
     } catch (error) {
@@ -399,25 +471,79 @@ export default function DeclarationsPage() {
             )}
           </div>
 
-          {/* JADVAL */}
+          {/* JADVAL VA EXCEL YUKLASH TUGMALARI */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4 bg-slate-50/50">
-              <div className="relative w-full sm:w-96">
+            
+            <div className="p-4 border-b border-slate-200 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-slate-50/50">
+              
+              {/* Jadval qidiruvi */}
+              <div className="relative w-full xl:w-80">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                 <input 
                   type="text" 
-                  placeholder="Xodim Ismi orqali qidiruv..." 
+                  placeholder="Jadvaldan xodim izlash..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-blue-600 text-sm font-medium"
+                  className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-300 rounded-lg outline-none focus:border-blue-600 text-sm font-medium shadow-sm"
                 />
               </div>
-              <button 
-                onClick={handleExportExcel}
-                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm whitespace-nowrap w-full sm:w-auto justify-center"
-              >
-                <Download className="w-4 h-4" /> Excel yuklab olish
-              </button>
+
+              {/* Yuklash tugmalari va Filial kaskadli filtrlari */}
+              <div className="flex flex-col md:flex-row items-center gap-3 w-full xl:w-auto p-2 bg-white border border-slate-200 rounded-xl shadow-sm">
+                
+                {/* 1. Viloyat Select */}
+                <div className="relative w-full md:w-48">
+                  <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <select
+                    value={selectedRegion}
+                    onChange={(e) => setSelectedRegion(e.target.value)}
+                    className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-sm font-bold text-slate-700 cursor-pointer appearance-none truncate"
+                  >
+                    <option value="all">Barcha hududlar</option>
+                    {Object.keys(NBU_REGIONS).map(region => (
+                      <option key={region} value={region}>{region}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Filial Select (Faqat viloyat tanlanganda ochiladi) */}
+                {selectedRegion !== 'all' && (
+                  <div className="relative w-full md:w-56 animate-in fade-in zoom-in duration-200">
+                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <select
+                      value={selectedBranch}
+                      onChange={(e) => setSelectedBranch(e.target.value)}
+                      className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-sm font-bold text-slate-700 cursor-pointer appearance-none truncate"
+                    >
+                      <option value="all">Barcha BXM / BXO lar</option>
+                      {NBU_REGIONS[selectedRegion].map(branch => (
+                        <option key={branch} value={branch}>{branch}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="flex gap-2 w-full md:w-auto border-l border-slate-100 pl-2">
+                  {/* Topshirmaganlar (QIZIL) */}
+                  <button 
+                    onClick={handleExportUnsubmittedExcel}
+                    className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg font-bold hover:bg-red-600 hover:text-white transition-all text-sm whitespace-nowrap"
+                    title="Tanlangan hudud va filial bo'yicha topshirmaganlarni yuklash"
+                  >
+                    <UserX className="w-4 h-4" /> Topshirmaganlar
+                  </button>
+
+                  {/* Topshirganlar (YASHIL) */}
+                  <button 
+                    onClick={handleExportExcel}
+                    className="flex-1 md:flex-none flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-colors shadow-sm text-sm whitespace-nowrap"
+                  >
+                    <Download className="w-4 h-4" /> Topshirganlar
+                  </button>
+                </div>
+
+              </div>
+
             </div>
 
             <div className="overflow-x-auto">

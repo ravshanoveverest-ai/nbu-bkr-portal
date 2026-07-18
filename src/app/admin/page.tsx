@@ -60,6 +60,9 @@ export default function AdminDashboard() {
   const [showAlgoModal, setShowAlgoModal] = useState(false);
   const itemsPerPage = 10; 
 
+  // Kaskadli menyu (Akkordeon) uchun state
+  const [expandedRegion, setExpandedRegion] = useState<string | null>(null);
+
   // --- RAW DATA STATES ---
   const [isLoading, setIsLoading] = useState(true);
   const [rawUsers, setRawUsers] = useState<any[]>([]);
@@ -133,7 +136,6 @@ export default function AdminDashboard() {
     // 2. FAQAT "Yillik deklaratsiya"larni ajratib olamiz (Rotatsiya va Yangi xodim kirmaydi!)
     let filteredDeclarations = rawDeclarations.filter((decl: any) => {
       const isDeclaration = !!decl.personalInfo; 
-      // Xato shu joyda edi, endi to'g'ridan to'g'ri 'type' ni tekshiramiz
       const isYillik = !decl.type || decl.type === 'yillik'; 
       return isDeclaration && isYillik;
     });
@@ -141,11 +143,9 @@ export default function AdminDashboard() {
     // 3. Muddatga (Campaign) ko'ra qat'iy saralash
     if (selectedCampaignId !== 'all') {
       filteredDeclarations = filteredDeclarations.filter(decl => {
-        // Agar deklaratsiyada campaignId bo'lsa (yangi tizim)
         if (decl.campaignId) {
           return decl.campaignId === selectedCampaignId;
         }
-        // Agar eski ma'lumot bo'lsa, sana orqali tekshiramiz
         const campaign = campaigns.find(c => c._id === selectedCampaignId);
         if (campaign) {
           const startTime = new Date(campaign.startDate).getTime();
@@ -167,14 +167,21 @@ export default function AdminDashboard() {
         rawSubmitted: 0, 
         totalUsers: 0, 
         dangerousCount: 0, 
-        uniqueSubmitters: new Set() 
+        uniqueSubmitters: new Set(),
+        branches: [] // Filiallarni hudud ichiga saqlash uchun yangi joy
       };
     });
 
     // Foydalanuvchilarni o'z filial va hududiga taqsimlaymiz
     rawUsers.forEach((u: any) => {
       const branchName = u.branch || "Noma'lum filial";
-      const regionName = getRegionName(branchName);
+      // Registrationdan olingan hududni aniq ishlatamiz (bo'lmasa fallback)
+      const regionName = u.region || getRegionName(branchName); 
+
+      // Agar map ichida bunday region yo'q bo'lsa (misol eski bazada xato yozilgan bo'lsa) standartga qo'shamiz
+      if (!regionMap[regionName] && regionMap["Toshkent shahri"]) {
+        regionMap[regionName] = { ...regionMap["Toshkent shahri"], name: regionName, totalUsers: 0, uniqueSubmitters: new Set(), branches: [] };
+      }
 
       if (regionMap[regionName]) {
         regionMap[regionName].totalUsers += 1;
@@ -198,17 +205,16 @@ export default function AdminDashboard() {
     let highRiskCountGlobal = 0;
     const globalUniqueSubmitters = new Set();
 
-    // Deklaratsiyalarni tahlil qilish va dublikatlarni tozalash
+    // Deklaratsiyalarni tahlil qilish
     filteredDeclarations.forEach((decl: any) => {
-      const branchName = decl.personalInfo?.branch || "Noma'lum filial";
-      const regionName = getRegionName(branchName);
+      const branchName = decl.personalInfo?.branch || decl.branch || "Noma'lum filial";
+      const regionName = decl.personalInfo?.region || decl.region || getRegionName(branchName);
       
       const identifier = decl.userEmail || decl.personalInfo?.fullName || decl.personalInfo?.passport || "NoName";
       
       if (globalUniqueSubmitters.has(identifier) && identifier !== "NoName") {
          return; 
       }
-      
       globalUniqueSubmitters.add(identifier);
 
       let score = 0;
@@ -259,7 +265,6 @@ export default function AdminDashboard() {
     });
 
     const finalBranches = Object.values(branchMap).map((b: any) => {
-      // Qat'iy chegara: filialdagi topshirganlar soni jami xodimlardan oshmasligi kerak
       const submitted = Math.min(b.uniqueSubmitters.size, b.employees > 0 ? b.employees : b.uniqueSubmitters.size);
       const avgScore = b.rawSubmitted > 0 ? Math.round(b.scoreSum / b.rawSubmitted) : 0;
       return {
@@ -271,6 +276,13 @@ export default function AdminDashboard() {
       };
     });
 
+    // Filiallarni o'z viloyati ichiga joylash
+    finalBranches.forEach(b => {
+      if (regionMap[b.region]) {
+        regionMap[b.region].branches.push(b);
+      }
+    });
+
     const finalMap = Object.values(regionMap).map((r: any) => ({
       id: r.id,
       name: r.name,
@@ -279,20 +291,20 @@ export default function AdminDashboard() {
       risk: r.rawSubmitted > 0 ? Math.round(r.riskSum / r.rawSubmitted) : 0
     }));
 
+    // Barcha regionlarni olamiz (faqat top 4 ta emas) va filiallarni sortlaymiz
     const finalProgress = Object.values(regionMap)
       .filter((r: any) => r.totalUsers > 0 || r.uniqueSubmitters.size > 0)
       .map((r: any) => {
-        // Qat'iy chegara: regiondagi topshirganlar jami xodimlardan oshmasin
         const submitted = Math.min(r.uniqueSubmitters.size, r.totalUsers > 0 ? r.totalUsers : r.uniqueSubmitters.size);
         return {
           id: r.id,
           name: r.name,
           total: r.totalUsers,
-          submitted: submitted
+          submitted: submitted,
+          branches: r.branches.sort((a:any, b:any) => b.employees - a.employees)
         };
       })
-      .sort((a, b) => b.submitted - a.submitted)
-      .slice(0, 4);
+      .sort((a, b) => b.total - a.total); // Odam soni bo'yicha eng yirik viloyatlar birinchi chiqadi
 
     let mostDangerous = { name: "Hozircha xavfsiz", risk: 0, total: 0, dangerous: 0 };
     Object.values(regionMap).forEach((r: any) => {
@@ -306,7 +318,6 @@ export default function AdminDashboard() {
     setMapData(finalMap);
     setProgressData(finalProgress);
 
-    // Global submitted hisoblash va 100% dan oshib ketishini oldini olish
     let rawCalcSubmitted = globalUniqueSubmitters.size > 0 && globalUniqueSubmitters.has("NoName") ? globalUniqueSubmitters.size - 1 : globalUniqueSubmitters.size;
     let clampedSubmitted = Math.min(rawCalcSubmitted, totalUsersCount);
 
@@ -642,38 +653,79 @@ export default function AdminDashboard() {
               </div>
             </div>
 
-            {/* PROGRESS CHART */}
+            {/* PROGRESS CHART (Viloyat va akkordeon shaklidagi filiallar bilan) */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 flex flex-col h-[500px]">
               <h2 className="text-lg font-bold text-slate-800 mb-6 flex items-center gap-2">
                 <BarChart3 className="w-5 h-5 text-blue-600" />
                 Topshirish ko'rsatkichlari
               </h2>
-              <div className="flex-1 overflow-y-auto pr-2 space-y-5 custom-scrollbar">
+              
+              <div className="flex-1 overflow-y-auto pr-2 space-y-4 custom-scrollbar">
                 {progressData.length > 0 ? progressData.map((item) => {
                   const percent = item.total > 0 ? Math.round((item.submitted / item.total) * 100) : 0;
                   const barColor = percent >= 90 ? 'bg-emerald-500' : percent >= 70 ? 'bg-blue-500' : 'bg-red-500';
+                  const isExpanded = expandedRegion === item.name;
+
                   return (
-                    <div key={item.id}>
-                      <div className="flex justify-between items-end mb-1.5">
-                        <span className="text-sm font-bold text-slate-700">{item.name}</span>
-                        <div className="text-right">
-                          <span className="text-xs font-bold text-slate-900">{item.submitted}</span>
-                          <span className="text-xs text-slate-400 font-medium"> / {item.total} kishi</span>
+                    <div key={item.id} className="border-b border-slate-100 pb-3 last:border-0">
+                      
+                      {/* Asosiy Viloyat Qismi (Clickable) */}
+                      <div 
+                        className="cursor-pointer hover:bg-slate-50 p-2 -mx-2 rounded-lg transition-colors group"
+                        onClick={() => setExpandedRegion(isExpanded ? null : item.name)}
+                      >
+                        <div className="flex justify-between items-end mb-1.5">
+                          <span className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            {item.name}
+                            {item.branches.length > 0 && (
+                              <span className="text-[10px] bg-slate-200 text-slate-600 px-1.5 py-0.5 rounded-full group-hover:bg-blue-100 group-hover:text-blue-700 transition-colors">
+                                {item.branches.length} ta
+                              </span>
+                            )}
+                          </span>
+                          <div className="text-right">
+                            <span className="text-xs font-bold text-slate-900">{item.submitted}</span>
+                            <span className="text-xs text-slate-400 font-medium"> / {item.total} kishi</span>
+                          </div>
+                        </div>
+                        <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden flex items-center relative">
+                          <div className={`h-full rounded-full transition-all duration-1000 ${barColor}`} style={{ width: `${percent}%` }}></div>
                         </div>
                       </div>
-                      <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden flex items-center relative">
-                        <div className={`h-full rounded-full transition-all duration-1000 ${barColor}`} style={{ width: `${percent}%` }}></div>
-                      </div>
-                      <div className="flex justify-between mt-1">
-                        <p className="text-[10px] text-slate-400">{Math.max(item.total - item.submitted, 0)} ta qoldi</p>
-                        <p className="text-[10px] font-bold text-slate-500">{percent}%</p>
-                      </div>
+
+                      {/* Filiallar Dropdown qismi (Faqat shu viloyat tanlansa ochiladi) */}
+                      {isExpanded && item.branches.length > 0 && (
+                        <div className="mt-3 pl-4 space-y-3 border-l-2 border-blue-100 animate-in slide-in-from-top-2 fade-in duration-200">
+                          {item.branches.map((branch: any) => {
+                            const bPercent = branch.employees > 0 ? Math.round((branch.submitted / branch.employees) * 100) : 0;
+                            const bColor = bPercent >= 90 ? 'bg-emerald-400' : bPercent >= 70 ? 'bg-blue-400' : 'bg-red-400';
+                            
+                            return (
+                              <div key={branch.id} className="w-full">
+                                <div className="flex justify-between items-end mb-1">
+                                  <span className="text-xs font-semibold text-slate-600 truncate max-w-[150px]" title={branch.name}>
+                                    {branch.name}
+                                  </span>
+                                  <div className="text-right whitespace-nowrap pl-2">
+                                    <span className="text-[10px] font-bold text-slate-700">{branch.submitted}</span>
+                                    <span className="text-[10px] text-slate-400 font-medium"> / {branch.employees}</span>
+                                  </div>
+                                </div>
+                                <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center relative">
+                                  <div className={`h-full rounded-full transition-all duration-1000 ${bColor}`} style={{ width: `${bPercent}%` }}></div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 }) : (
                   <p className="text-slate-400 text-sm text-center mt-10">Ushbu muddat uchun ma'lumot yo'q</p>
                 )}
               </div>
+              
               <Link href="/admin/declarations" className="block text-center w-full mt-6 py-2.5 bg-blue-50 text-blue-600 text-sm font-bold rounded-xl hover:bg-blue-100 transition-colors border border-blue-200">
                 Batafsil ko'rish
               </Link>

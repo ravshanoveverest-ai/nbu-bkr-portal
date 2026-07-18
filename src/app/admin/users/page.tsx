@@ -5,8 +5,7 @@ import Link from 'next/link';
 import { 
   LayoutDashboard, FileText, ShieldAlert, Users, Calendar, 
   Settings, LogOut, Search, Trash2, 
-  Shield, User as UserIcon, X, FileBarChart, AlertTriangle,
-  CheckSquare
+  User as UserIcon, AlertTriangle, FileBarChart, CheckSquare
 } from 'lucide-react';
 
 export default function UsersPage() {
@@ -15,9 +14,8 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(true);
 
   // Admin profil ma'lumotlari
-// Admin profil ma'lumotlari
-const adminName = "Hasan Turaevich";
-const adminRole = "BKR Boshlig'i";
+  const adminName = "Hasan Turaevich";
+  const adminRole = "BKR Boshlig'i";
 
   // O'chirish modali
   const [deleteModal, setDeleteModal] = useState<{isOpen: boolean, userId: string | null, userName: string}>({
@@ -26,25 +24,20 @@ const adminRole = "BKR Boshlig'i";
     userName: ''
   });
 
-  // 1. Sahifa yuklanganda Admin ismini olish va Bazadan Userlarni tortib kelish
+  // Sahifa yuklanganda Bazadan Userlarni tortib kelish
   useEffect(() => {
-    // // Admin ismini o'rnatish
-    // const userInfoString = localStorage.getItem('user_info');
-    // if (userInfoString) {
-    //   const parsedUser = JSON.parse(userInfoString);
-    //   setAdminName(parsedUser.fullName || "Administrator");
-    // }
-
-    // Bazadan barcha xodimlarni olib kelish (Backend API chaqiruvi)
     fetchUsers();
   }, []);
 
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('https://nbu-bkr-api.onrender.com/api/auth/users'); // Backenddagi API (buni endi yozamiz)
+      const res = await fetch('https://nbu-bkr-api.onrender.com/api/auth/users');
       const data = await res.json();
+      
       if (res.ok) {
+        // Backenddan qanday ma'lumot kelayotganini tekshirish uchun konsolga chiqaramiz
+        console.log("Backenddan kelgan Xodimlar ro'yxati:", data);
         setUsers(data);
       }
     } catch (error) {
@@ -61,7 +54,7 @@ const adminRole = "BKR Boshlig'i";
     return matchSearch;
   });
 
-  // 2. Xodimni o'chirish logikasi
+  // Xodimni o'chirish logikasi
   const confirmDelete = async () => {
     if (!deleteModal.userId) return;
 
@@ -132,7 +125,6 @@ const adminRole = "BKR Boshlig'i";
             <div className="flex items-center gap-3">
               <ShieldAlert className="w-5 h-5" /> Xabarnomalar
             </div>
-            <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">3</span>
           </Link>
           <Link href="/admin/campaigns" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors">
             <Calendar className="w-5 h-5" /> Muddatlarni sozlash
@@ -148,9 +140,6 @@ const adminRole = "BKR Boshlig'i";
           </Link>
         </nav>
         <div className="p-4 border-t border-slate-700/50">
-          <Link href="/admin/settings" className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-800/50 hover:text-white rounded-lg transition-colors mb-2">
-            <Settings className="w-5 h-5" /> Sozlamalar
-          </Link>
           <button 
             onClick={() => { localStorage.clear(); window.location.href = '/login'; }}
             className="w-full flex items-center gap-3 px-3 py-2.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"
@@ -183,7 +172,7 @@ const adminRole = "BKR Boshlig'i";
         <div className="flex-1 p-8">
           
           {/* STATISTIKA */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <div className="mb-8 w-full md:w-1/3">
             <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-slate-500 mb-1 uppercase tracking-wider">Jami ro'yxatdan o'tganlar</p>
@@ -191,16 +180,6 @@ const adminRole = "BKR Boshlig'i";
               </div>
               <div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
                 <Users className="w-7 h-7" />
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-sm flex items-center justify-between relative overflow-hidden">
-               <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
-              <div>
-                <p className="text-sm font-bold text-slate-500 mb-1 uppercase tracking-wider">Tizim Adminlari</p>
-                <h3 className="text-3xl font-black text-indigo-600">{users.filter(u => u.role === 'admin').length}</h3>
-              </div>
-              <div className="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-                <Shield className="w-7 h-7" />
               </div>
             </div>
           </div>
@@ -228,55 +207,87 @@ const adminRole = "BKR Boshlig'i";
                 <thead className="bg-slate-50 text-slate-500 font-bold uppercase text-[11px] tracking-wider border-b border-slate-200">
                   <tr>
                     <th className="px-6 py-4 whitespace-nowrap">F.I.Sh / Email</th>
-                    <th className="px-6 py-4 whitespace-nowrap">Ro'yxatdan o'tgan sana</th>
-                    <th className="px-6 py-4 whitespace-nowrap">Tizim roli</th>
+                    <th className="px-6 py-4 whitespace-nowrap">Hudud / Filial</th>
+                    <th className="px-6 py-4 whitespace-nowrap">Lavozimi</th>
+                    <th className="px-6 py-4 whitespace-nowrap">Telefon</th>
+                    <th className="px-6 py-4 whitespace-nowrap">Sana va vaqt</th>
                     <th className="px-6 py-4 whitespace-nowrap text-right">Harakatlar</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200">
                   {isLoading ? (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-bold">
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-bold">
                         Ma'lumotlar yuklanmoqda...
                       </td>
                     </tr>
                   ) : filteredUsers.length > 0 ? (
-                    filteredUsers.map((user) => (
-                      <tr key={user._id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-6 py-4">
-                          <p className="font-bold text-[#0A2540]">{user.fullName}</p>
-                          <p className="text-xs font-medium text-slate-500 mt-0.5">{user.email}</p>
-                        </td>
-                        <td className="px-6 py-4">
-                          <p className="font-medium text-slate-700">
-                            {new Date(user.createdAt).toLocaleDateString('uz-UZ')}
-                          </p>
-                        </td>
-                        <td className="px-6 py-4">
-                          {user.role === 'admin' ? (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-indigo-100 text-indigo-700 border border-indigo-200">
-                              <Shield className="w-3.5 h-3.5" /> Administrator
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase bg-slate-100 text-slate-600 border border-slate-200">
-                              <UserIcon className="w-3.5 h-3.5" /> Oddiy Xodim
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 text-right">
-                          <button 
-                            onClick={() => setDeleteModal({isOpen: true, userId: user._id, userName: user.fullName})}
-                            title="Xodimni o'chirish"
-                            className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-200"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))
+                    filteredUsers.map((user) => {
+                      // Backenddan qaysi holatda kelsa ham ma'lumotni tutib olish uchun himoya (fallback)
+                      const region = user.region || user.personalInfo?.region || "Kiritilmagan";
+                      const branch = user.branch || user.personalInfo?.branch || "Kiritilmagan";
+                      const position = user.position || user.personalInfo?.position || "Kiritilmagan";
+                      const phone = user.phone || user.personalInfo?.phone || "Kiritilmagan";
+
+                      return (
+                        <tr key={user._id} className="hover:bg-slate-50 transition-colors">
+                          
+                          {/* 1. F.I.Sh / Email */}
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-[#0A2540]">{user.fullName || "Noma'lum"}</p>
+                            <p className="text-xs font-medium text-slate-500 mt-0.5">{user.email}</p>
+                          </td>
+                          
+                          {/* 2. Hudud / Filial */}
+                          <td className="px-6 py-4">
+                            <p className={`font-bold ${region === "Kiritilmagan" ? "text-red-400" : "text-slate-700"}`}>
+                              {region}
+                            </p>
+                            <p className={`text-xs font-medium mt-0.5 ${branch === "Kiritilmagan" ? "text-red-400" : "text-slate-500"}`}>
+                              {branch}
+                            </p>
+                          </td>
+
+                          {/* 3. Lavozimi */}
+                          <td className="px-6 py-4">
+                            <p className={`font-medium ${position === "Kiritilmagan" ? "text-red-400" : "text-slate-700"}`}>
+                              {position}
+                            </p>
+                          </td>
+
+                          {/* 4. Telefon */}
+                          <td className="px-6 py-4">
+                            <p className={`font-medium ${phone === "Kiritilmagan" ? "text-red-400" : "text-slate-700"}`}>
+                              {phone}
+                            </p>
+                          </td>
+
+                          {/* 5. Sana va Vaqt */}
+                          <td className="px-6 py-4">
+                            <p className="font-bold text-slate-700">
+                              {user.createdAt ? new Date(user.createdAt).toLocaleDateString('uz-UZ') : "-"}
+                            </p>
+                            <p className="text-[11px] font-semibold text-slate-500 mt-0.5 uppercase tracking-wider">
+                              {user.createdAt ? new Date(user.createdAt).toLocaleTimeString('uz-UZ', { hour: '2-digit', minute: '2-digit' }) : "-"}
+                            </p>
+                          </td>
+
+                          {/* 6. Harakatlar (Faqat Delete) */}
+                          <td className="px-6 py-4 text-right">
+                            <button 
+                              onClick={() => setDeleteModal({isOpen: true, userId: user._id, userName: user.fullName})}
+                              title="Xodimni o'chirish"
+                              className="p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors border border-transparent hover:border-red-200"
+                            >
+                              <Trash2 className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   ) : (
                     <tr>
-                      <td colSpan={4} className="px-6 py-12 text-center text-slate-500 font-bold">
+                      <td colSpan={6} className="px-6 py-12 text-center text-slate-500 font-bold">
                         Qidiruv bo'yicha xodim topilmadi.
                       </td>
                     </tr>
